@@ -34,32 +34,45 @@ class TestDTCWTReferenceExtend1D(TestCasePy3):
 
 
     def test_extend(self):
-        # test_arrays is (input_array, extension_length, extension_data, 
-        #                 output)
+        # test_arrays is (input_array, pre_extension_length, extension_data, 
+        #                 post_extension_length, output)
         # extension_data = None corresponds to no input
         test_arrays = (
-                ([1, 2, 3, 4], 3, None, [3, 2, 1, 1, 2, 3, 4, 4, 3, 2]),
-                ([1, 2, 3, 4], 0, None, numpy.array([1, 2, 3, 4])),
-                ([1, 2, 3, 4], 3, numpy.array([4, 3, 2, 1]), 
+                ([1, 2, 3, 4], 3, None, None, [3, 2, 1, 1, 2, 3, 4, 4, 3, 2]),
+                ([1, 2, 3, 4], 0, None, None, numpy.array([1, 2, 3, 4])),
+                ([1, 2, 3, 4], 3, numpy.array([4, 3, 2, 1]), None,
                     [3, 2, 1, 1, 2, 3, 4, 4, 3, 2]),
-                (numpy.array([1, 2, 3, 4]), 3, [8, 7, 6, 5], 
+                (numpy.array([1, 2, 3, 4]), 3, [8, 7, 6, 5], None,
                     [7, 6, 5, 1, 2, 3, 4, 8, 7, 6]),
-                ([1, 2, 3, 4], 6, [8, 7, 6, 5], 
-                    [3, 4, 8, 7, 6, 5, 1, 2, 3, 4, 8, 7, 6, 5, 1, 2]))
+                ([1, 2, 3, 4], 6, [8, 7, 6, 5], None,
+                    [3, 4, 8, 7, 6, 5, 1, 2, 3, 4, 8, 7, 6, 5, 1, 2]),
+                 ([1, 2, 3, 4], 6, [8, 7, 6, 5], 3,
+                    [3, 4, 8, 7, 6, 5, 1, 2, 3, 4, 8, 7, 6]),
+                 ([1, 2, 3, 4], 6, [8, 7, 6, 5], 0,
+                    [3, 4, 8, 7, 6, 5, 1, 2, 3, 4]),
+                 ([1, 2, 3, 4], 3, [8, 7, 6, 5], 6,
+                    [7, 6, 5, 1, 2, 3, 4, 8, 7, 6, 5, 1, 2]),
+                 ([1, 2, 3, 4], 0, [8, 7, 6, 5], 6,
+                    [1, 2, 3, 4, 8, 7, 6, 5, 1, 2]))
 
-        for input_arr, ext_length, ext_data, output_arr in test_arrays:
+        for (input_arr, pre_ext_length, ext_data, 
+                post_ext_length, output_arr) in test_arrays:
 
             if ext_data is not None:
                 output_array = reference.extend_1d(
-                        numpy.array(input_arr), ext_length, ext_data)
+                        numpy.array(input_arr), pre_ext_length, ext_data,
+                        post_extension_length=post_ext_length)
             else:
                 output_array = reference.extend_1d(
-                        numpy.array(input_arr), ext_length)
+                        numpy.array(input_arr), pre_ext_length,
+                        post_extension_length=post_ext_length)
 
             self.assertTrue(numpy.alltrue(output_array == output_arr))
 
+class Test1DDTCWTSingleExtension(TestCasePy3):
 
-class TestDTCWTReference(TestCasePy3):
+    dtcwt_forward_function = staticmethod(
+            reference._1d_dtcwt_forward_single_extension)
 
     def test_1d_DTCWT_inverse(self):
 
@@ -81,8 +94,42 @@ class TestDTCWTReference(TestCasePy3):
 
             self.assertTrue(numpy.allclose(input_array, test_output))
 
-    def _1d_DTCWT_forward_test(self, dtcwt_forward_function):
-        
+    def test_odd_array_fail(self):
+        '''Test that the right exception is raised for odd length arrays
+        '''
+        datasets = (
+                ((127,), 4),
+                ((555,), 10))
+        for input_shape, levels in datasets:
+
+            input_array = numpy.random.randn(*input_shape)
+            self.assertRaisesRegex(ValueError, 
+                    'Input array is not even length',
+                    self.dtcwt_forward_function, *(input_array, levels))
+
+    def test_too_many_levels_fail(self):
+        '''Test that if too many levels are requested, an error is raised
+        '''
+        # The levels requested should be the minimum to cause a failure
+        datasets = (
+                ((128,), 8),
+                ((256,), 9),
+                ((254,), 8),
+                ((258,), 9))
+        for input_shape, levels in datasets:
+
+            input_array = numpy.random.randn(*input_shape)
+
+            # Make sure the levels-1 case works
+            self.dtcwt_forward_function(input_array, levels-1)
+
+            self.assertRaisesRegex(ValueError, 
+                    'Input array too short for levels requested',
+                    self.dtcwt_forward_function, *(input_array, levels))
+
+    def test_1d_DTCWT_forward_against_data(self):
+        '''Test against data generated using the NGK's Matlab toolbox
+        '''
         # For a reason I don't understand, the original Matlab 
         # implementation uses the a and b tree q-shift filters swapped.
         # This confuses me...
@@ -113,7 +160,7 @@ class TestDTCWTReference(TestCasePy3):
             if levels == 10:
                 continue
 
-            lo, hi, scale = dtcwt_forward_function(input_array, levels)
+            lo, hi, scale = self.dtcwt_forward_function(input_array, levels)
 
             self.assertTrue(numpy.allclose(lo, ref_lo))
 
@@ -129,15 +176,46 @@ class TestDTCWTReference(TestCasePy3):
         reference.H00a = reference.H00b
         reference.H00b = temp
 
+class Test1DDTCWT(Test1DDTCWTSingleExtension):
+    dtcwt_forward_function = staticmethod(
+            reference.dtcwt_forward)
 
-    def test_1d_DTCWT_forward_simple(self):
+    def test_single_extension_equivalence(self):
 
-        self._1d_DTCWT_forward_test(reference._1d_dtcwt_forward_simple)
+        # a tuple of test specs:
+        # (input_shape, levels)
+        datasets = (
+                ((126,), 4),
+                ((200,), 5),
+                ((200,), 1)
+                ((72,), 3),
+                ((128,), 6),
+                ((130,), 6),
+                ((126,), 5))
 
-    def test_1d_DTCWT_forward(self):
+        for input_shape, levels in datasets:
 
-        self._1d_DTCWT_forward_test(reference.dtcwt_forward)
+            input_array = numpy.random.randn(*input_shape)
 
+            lo, hi, scale = self.dtcwt_forward_function(
+                    input_array, levels)
+            ref_lo, ref_hi, ref_scale = (
+                    reference._1d_dtcwt_forward_single_extension(
+                    input_array, levels))
+
+            self.assertTrue(numpy.allclose(lo, ref_lo))
+
+            for level in range(levels):
+                self.assertTrue(
+                        numpy.allclose(hi[level], ref_hi[level]))
+                self.assertTrue(
+                        numpy.allclose(scale[level], ref_scale[level]))
+
+
+
+class TestDTCWTReferenceMisc(TestCasePy3):
+    ''' Other miscellaneous functions in reference
+    '''
     #def test_even_filter_length_fail(self):
     #    for input_shape, kernel_length, axis in self.datasets:
     #        if axis is None:
@@ -149,7 +227,6 @@ class TestDTCWTReference(TestCasePy3):
     #                reference.filter_and_downsample, *args)
 
     def test_extend_and_filter(self):
-        
         # a tuple of test specs:
         # (input_shape, kernel_length, extension_array)
         datasets = (
