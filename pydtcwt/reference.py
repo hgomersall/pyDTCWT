@@ -27,20 +27,23 @@ understanding, rather than speed.
 # Marc Antonini, Michel Barlaud, Pierre Mathieu, Ingrid Daubechies
 # "Image Coding using Wavelet Transform", IEEE Transactions on Image
 # Processing, vol 1, no 2, pp 205-220, April 1992
-biort_hi = numpy.array([
-    0.045636, -0.028772, -0.295636, 0.557544, -0.295636, -0.028772, 
-    0.045636])
 biort_hi = numpy.array([0.0456358815571251, -0.0287717631142493,
     -0.2956358815571280, 0.5575435262285023, -0.2956358815571233, 
     -0.0287717631142531, 0.0456358815571261])
 
-biort_lo = numpy.array([
-     0.026749, -0.016864, -0.078223, 0.266864, 0.602949, 0.266864, 
-    -0.078223, -0.016864,  0.026749])
 biort_lo = numpy.array([0.0267487574108101, -0.0168641184428747, 
     -0.0782232665289905, 0.2668641184428729, 0.6029490182363593,
     0.2668641184428769, -0.0782232665289884, -0.0168641184428753,
     0.0267487574108096])
+
+# The inverse filters are computed from the opposite filter with
+# alternate coefficients negated.
+inv_biort_hi = biort_lo.copy()
+inv_biort_hi[1::2] *= -1
+
+inv_biort_lo = biort_hi.copy()
+inv_biort_lo[0::2] *= -1
+
 
 # The Q-shift filters used in levels 2 onwards of the DTCWT are
 # derived from a single array, described as H_L in the key
@@ -51,23 +54,24 @@ biort_lo = numpy.array([0.0267487574108101, -0.0168641184428747,
 #
 # The following is a length-14 example
 HL_14 = numpy.array([
-    0.00325314, -0.00388321,  0.03466035, -0.03887280, -0.11720389,
-    0.27529538,  0.75614564,  0.56881042,  0.01186609, -0.10671180,
-    0.02382538,  0.01702522, -0.00543948, -0.00455690])
+    0.0032531427636532, -0.0038832119991585, 0.0346603468448535, 
+    -0.0388728012688278, -0.1172038876991153, 0.2752953846688820, 
+    0.7561456438925225, 0.5688104207121227, 0.0118660920337970, 
+    -0.1067118046866654, 0.0238253847949203, 0.0170252238815540, 
+    -0.0054394759372741, -0.0045568956284755])
+
+HL_16 = numpy.array([
+    -0.0047616119384559, -0.0004460227892623, -0.0000714419732797, 
+    0.0349146123068422, -0.0372738957998980, -0.1159114574274408, 
+    0.2763686431330317, 0.7563937651990367, 0.5671344841001330, 
+    0.0146374059644733, -0.1125588842575220, 0.0222892632669227, 
+    0.0184986827241562, -0.0072026778782583, -0.0002276522058978, 
+    0.0024303499451487])
 
 # Firstly we create the qshift filters from HL
 # This uses the same notation as [Kingsbury_99] (albeit allowing for
 # the lack of suffixes) and is taken from that paper, section 6.
 #
-# We want the tree-a in the filter tree to yield the real part
-# of the complex output and tree-b to yield the imaginary part.
-# For this to be true, the high pass filter for tree a should be
-# the +q filter (that is, a quarter shift delay) and for tree-b
-# should be the +3q filter (three-quarters shift delay).
-#
-# Conversely, the low pass filter for tree a should be the +3q filter
-# and for tree b should be the +q filter.
-
 # Low pass tree-b filter first. This is simply HL.
 H00b = HL_14.copy()
 
@@ -153,7 +157,7 @@ def extend_1d(a, pre_extension_length, extension_array=None,
 
     elif pre_extension_length > len(extension_array):
         # In this case, the extension array is not long enough to 
-        # fill at least on extension, so we need to make it longer.
+        # fill at least one extension, so we need to make it longer.
         # We do this by considering an array made of the concatenation
         # of `a` and extension_array. This makes the extension
         # an alternate tiling of `a` and extension array. We call
@@ -207,18 +211,25 @@ def extend_1d(a, pre_extension_length, extension_array=None,
 
     return output_array
 
-def extend_and_filter(a, kernel, extension_array=None, pre_extension_length=None,
-        post_extension_length=None):
+def extend_and_filter(a, kernel, extension_array=None, 
+        pre_extension_length=None, post_extension_length=None):
     '''1D filter the array `a` with `kernel`.
 
     The signal is extended at the ends using the data in extension array
-    using extend_1d. If `extension_array` is None, `a` itself 
-    is used for the extension.
+    using :func:`extend_1d`. If `extension_array` is None, `a[::-1]` is
+    used for the extension (i.e. reversed `a`).
 
-    The resultant array is the same length as `a`.
+    `pre_extension_length` and `post_extension_length` define 
+    how long an extension should be used. By default 
+    pre_extension_length is (floor(filter_length/2) - 1) and 
+    post_extension_length is (filter_length - pre_extension_length - 1).
+    With such extensions, the resultant array is the same length as `a`.
     '''
     if pre_extension_length is None:
         pre_extension_length = (len(kernel) - 1)//2
+
+    if post_extension_length is None:
+        post_extension_length = len(kernel) - pre_extension_length - 1
 
     extended_a = extend_1d(a, pre_extension_length, extension_array, 
             post_extension_length)
@@ -226,122 +237,175 @@ def extend_and_filter(a, kernel, extension_array=None, pre_extension_length=None
     filtered_a = numpy.convolve(extended_a, kernel, mode='valid')
     return filtered_a
 
+def extend_expand_and_filter(a, kernel, extension_array=None,
+        pre_extension_length=None, post_extension_length=None,
+        first_sample_zero=True):
+    '''Used by the inverse DTCWT. This function filters the
+    array `a` with `kernel` after symmetric extension and
+    two times upsampling (by interlacing the samples with
+    zeros).
+
+    The signal is extended at the ends using the data in extension array
+    using :func:`extend_1d`. If `extension_array` is None, `a[::-1]` is
+    is used for the extension (i.e. reversed `a`).
+
+    After extending the input, the signal is interlaced with zeros.
+    `first_sample_zero` dictates whether the first sample of the 
+    expanded version of `a` is 0, or whether it is the first element
+    of `a`. See below for an example of this usage.
+
+    `pre_extension_length` and `post_extension_length` define 
+    how long an extension should be *after* two times upsampling. 
+    By default, pre_extension_length is (floor(filter_length/2) - 1) and 
+    post_extension_length is (filter_length - pre_extension_length - 1).
+    With such extensions, the resultant array is twice the length of `a`.
+
+    For example, for input `[a1, a2, a3, a4, a5]` and extension
+    `[b1, b2, b3]`, the expansion with `pre_extension_length` as 5 and 
+    `first_sample_zero` as `True` would yield the following expanded
+    and extended array:
+    [b1, 0, b2, 0, b3, 0, a1, 0, a2, 0, a3, 0, a4, ...]
+    and with `first_sample_zero as `False` would yield the following:
+    [0, b2, 0, b3, 0, a1, 0, a2, 0, a3, 0, a4, 0, ...]
+
+    In both cases there are 5 extension samples, followed by either
+    0 or a1 depending on the `first_sample_zero` flag.
+    '''
+    if pre_extension_length is None:
+        pre_extension_length = (len(kernel) - 1)//2
+
+    if post_extension_length is None:
+        post_extension_length = len(kernel) - pre_extension_length - 1
+
+    # We need to extend a by only the right number of samples such
+    # that when the array is expanded, the extension is the correct
+    # length and first_sample_zero is correct.
+    if first_sample_zero:
+        # The last sample of the pre extension is not zero, so we need
+        # ceil(pre_extension_length/2) pre extension samples.
+        # The first sample of the post extension is zero, so we need
+        # floor(post_extension_length/2) post extension samples.
+        extended_a = extend_1d(a, (pre_extension_length+1)//2,
+                extension_array, post_extension_length//2)
+
+    else:
+        # The opposite of above
+        extended_a = extend_1d(a, (pre_extension_length)//2, 
+                extension_array, (post_extension_length+1)//2)
+
+    expanded_extended_a = numpy.zeros(len(a)*2 + 
+            pre_extension_length + post_extension_length)
+
+    if first_sample_zero:
+        # In this case, if we have an even pre extension length, we
+        # begin the extension with the first sample zero, otherwise
+        # the first sample is an array value.
+        expanded_extended_a[(pre_extension_length + 1)%2::2] = extended_a
+    else:
+        # Opposite to above
+        expanded_extended_a[pre_extension_length%2::2] = extended_a
+
+    filtered_exp_ext_a = numpy.convolve(
+            expanded_extended_a, kernel, mode='valid')
+
+    return filtered_exp_ext_a
+
 def _1d_dtcwt_forward(x, levels):
     '''Implements the forward 1D Dual-tree Complex Wavelet Transform.
 
     `x` is the input array and `levels` is the number of levels
     of the DTCWT that should be taken.
+
+    This implementation is not identical to that described in the 
+    various papers. Specifically, the a-tree defines the imaginary
+    part and the b-tree defines the real part of the high pass output.
+    This is largely arbitrary, though it does have an impact on the phase
+    response of the output (and changing it requires making sure all the
+    phases are consistent). The reason for implementing as described is
+    to keep the output consistent with Nick Kingsbury's original dtcwt
+    toolbox.
     '''
     hi = []
     scale = []
 
     # We need to work with an even length array
     if len(x) % 2 == 1:
-        raise ValueError('Input array is not even length: the input array '
+        raise ValueError('Input length error: the input array '
                 'must be of even length.')
-
-    if levels > int(math.floor(math.log(len(x), 2))):
-        raise ValueError('Input array too short for levels requested. '
-                'Try requesting fewer levels or use a longer input')
 
     _hi = extend_and_filter(x, biort_hi)
     _lo = extend_and_filter(x, biort_lo)
 
     # The two trees are extracted and downsampled.
-    # The tree a filter is one sample delayed from the tree b
+    # The tree b filter is one sample delayed from the tree a
     # filter (which is equivalent to just taking the output
     # from the 2nd sample)
-    tree_a_lo = _lo[1::2]
-    tree_b_lo = _lo[0::2]
-
-    tree_a_extension = tree_b_lo[::-1]
-    tree_b_extension = tree_a_lo[::-1]
+    tree_a_lo = _lo[0::2]
+    tree_b_lo = _lo[1::2]
 
     # Write the first level to the respective outputs
-    # For the high pass filter, the tree b filter is one
-    # sample delayed from the tree a filter
+    # For the high pass filter, the tree-a filter is one
+    # sample delayed from the tree-b filter (remembering we're
+    # setting the tree-a hi output to be the imaginary part).
     hi.append(_hi[0::2] + 1j*_hi[1::2])
     scale.append(_lo)
 
-    # This is the offset we need in order to find the extension
-    # from the reverse opposite tree lo pass array.
-    # Every time we have an odd-length output, this gets incremented 
-    # (except for the first level)
-    extension_offset = 0
+    # The pre_extension and post_extension set how many 
+    # additional samples are added at the beginning and the
+    # end of the array such that the filtered array is the correct
+    # length.
+    pre_extension_length = (len(H01a)-1)//2
+    post_extension_length = (len(H01a))//2
 
     for level in range(1, levels):
 
-        pre_extension_length = (len(H01a) - 1)//2
-        post_extension_length = len(H01a)//2
-
-        extension_offset += len(tree_a_lo) % 2
+        if len(tree_a_lo) % 2 == 1:
+            # In this case, the low pass inputs are odd length. 
+            # The following is the workaround used in NGK's wavelet
+            # toolbox to make sure that the filtering and downsampling
+            # stages always have an even number of samples to work with.
+            _tree_b_lo = numpy.concatenate((tree_a_lo, tree_b_lo[-1:]))
+            tree_a_lo = numpy.concatenate((tree_a_lo[:1], tree_b_lo))
+            tree_b_lo = _tree_b_lo
 
         # It is necessary to extend each filter array with the 
         # reflected values from the opposite tree. 
         # This is because the qshift filters are not symmetric and so 
         # what we *actually* want is the time reflection of the previous
         # level that has been filtered with a time-reversed filter (with
-        # an equivalent effect to having the previous level extended before
-        # filtering to create the extension on *this* level)
+        # an equivalent effect to having the previous level extended 
+        # before filtering to create the extension on *this* level)
         # 
-        # The final [::2] indexing is the decimation by 2.
+        # This is apparent by considering the function 
+        # _1d_dtcwt_forward_single_extension that is the equivalent 
+        # to this function, but performs the extension only once at 
+        # the beginning.
+        #
+        tree_a_extension = tree_b_lo[::-1]
+        tree_b_extension = tree_a_lo[::-1]
 
+        # The final [::2] indexing is the decimation by 2.
         tree_a_hi = extend_and_filter(tree_a_lo, H01a, tree_a_extension, 
                 pre_extension_length, post_extension_length)[::2]
         tree_b_hi = extend_and_filter(tree_b_lo, H01b, tree_b_extension, 
                 pre_extension_length, post_extension_length)[::2]
 
-        # The additional pre-samples are to create enough samples
-        # to extract the next extension array. The difficulty is in
-        # the post-array case when an odd-length resultant array causes 
-        # a shift in the trailing extension.
-        # FIXME - this extra work is unnecessary when the resultant array 
-        # is either long enough already or we're dealing with the even case
-        _filtext_tree_a_lo = extend_and_filter(tree_a_lo, H00a, 
-                tree_a_extension, 2*post_extension_length+extension_offset, 
-                post_extension_length)
-
-        _filtext_tree_b_lo = extend_and_filter(tree_b_lo, H00b, 
-                tree_b_extension, 2*post_extension_length+extension_offset, 
-                post_extension_length)
-
-        # Obviously, we now want to remove the extension offset for getting
-        # the actual output.
-        trim_samples = (2*post_extension_length + extension_offset - 
-                pre_extension_length)
-        tree_a_lo = _filtext_tree_a_lo[trim_samples::2]
-        tree_b_lo = _filtext_tree_b_lo[trim_samples::2]
-
-        print 'a', _filtext_tree_a_lo[::-1], tree_a_lo
-        print 'b', _filtext_tree_b_lo[::-1], tree_b_lo
-
-        # In the case when the lo pass arrays have odd length, the extension
-        # is found by removing the last value of the opposite tree before
-        # reversing that array. This is because in the case when we consider
-        # one single full extension (as in 
-        # `_1d_dtcwt_forward_single_extension`) an odd length lo pass output
-        #
-        #extension_offset += len(tree_a_lo) % 2
-
-        #extra_extension = 
-
-        tree_a_extension = _filtext_tree_b_lo[::-1][1+extension_offset::2]
-        tree_b_extension = _filtext_tree_a_lo[::-1][1+extension_offset::2]
-
-        print 'level', level, extension_offset
-        print tree_a_extension
-        print tree_b_extension
-
+        tree_a_lo = extend_and_filter(tree_a_lo, H00a, tree_a_extension, 
+                pre_extension_length, post_extension_length)[::2]
+        tree_b_lo = extend_and_filter(tree_b_lo, H00b, tree_b_extension, 
+                pre_extension_length, post_extension_length)[::2]
+ 
         # Create the interleaved scale array
-        _scale = numpy.empty(len(tree_a_lo) + len(tree_b_lo))
-        _scale[1::2] = tree_a_lo
-        _scale[0::2] = tree_b_lo
+        _scale = numpy.empty(len(tree_a_lo) + len(tree_b_lo),
+                dtype=tree_a_lo.dtype)
+        _scale[0::2] = tree_a_lo
+        _scale[1::2] = tree_b_lo
 
         # Append the outputs
-        hi.append(tree_a_hi + 1j*tree_b_hi)
+        hi.append(tree_b_hi + 1j*tree_a_hi)
         scale.append(_scale)
 
-    # lo is simple the final scale
+    # lo is simply the final scale
     lo = scale[-1]
 
     # Finally turn the lists into immutable tuples
@@ -350,15 +414,16 @@ def _1d_dtcwt_forward(x, levels):
 
     return lo, hi, scale
 
-def _1d_dtcwt_forward_single_extension(x, levels):
-    '''Implements a simplified version of the forward 1D 
-    Dual-tree Complex Wavelet Transform.
 
-    Its inputs and outputs are equivalent to _1d_dtcwt_forward, but
+def _1d_dtcwt_forward_single_extension(x, levels):
+    '''Implements a version of the forward 1D Dual-tree Complex 
+    Wavelet Transform.
+
+    Its inputs and outputs are equivalent to :func:`_1d_dtcwt_forward`, but
     the symmetric extension of the dataset is performed only once at the
     beginning. This gives an insight into the operation of the more memory
     and computationally efficient extension technique that is used in the
-    usual _1d_dtcwt_forward.
+    usual :func:`_1d_dtcwt_forward`.
 
     `x` is the input array and `levels` is the number of levels
     of the DTCWT that should be taken. The length of `x` must be even.
@@ -393,36 +458,42 @@ def _1d_dtcwt_forward_single_extension(x, levels):
     branch conditions).
     2. There is an additional not-insignificant processing overhead to
     compute samples that are used simply as extensions.
-    3. There is no trivial way to compute the reverse DTCWT.
+    3. There is no trivial way to compute the inverse DTCWT.
 
-    Without a doubt, all these problems can be overcome with 
-    approximations or insights of which I'm not aware, but the above 
-    gives a summary of the potential difficulties. For these reasons
-    the simplest implementations restrict the number of levels and
-    the length of the output array to be such that the output array
-    length has 2**levels as a factor.
+    _1d_dtcwt_forward implements an approximation to work around this
+    which is the same as used in Kingsbury's dtcwt toolbox. This is
+    to pre-extend or post-extend the array (pre- or post- 
+    according to which tree is being processed) with a single sample
+    by replicating the first or last sample respectively. This makes
+    sure the filtered array length is always even. This approximation
+    is based on the assumption that maintaining fidelity of the centre
+    of the image is more important the doing so at the edges.
+    
+    We restrict this function to arrays having 2**levels as a factor
+    in their lengths. This keeps everything conceptually simple and 
+    means that for all valid inputs, this function should generate
+    the same output as would _1d_dtcwt_forward given the same input 
+    (though _1d_dtcwt_forward can handle a larger set of inputs). 
+    That is, all outputs from this function can be used with 
+    :func:`_1d_dtcwt_inverse` to compute the inverse.
     '''
+
     hi = []
     scale = []
 
     # We need to work with an even length array
     if len(x) % 2 == 1:
-        raise ValueError('Input array is not even length: the input array '
+        raise ValueError('Input length error: the input array '
                 'must be of even length.')
 
     if 2**levels > len(x):
-        raise ValueError('Input array too short for levels requested. '
-                'Try requesting fewer levels or use a longer input')
+        raise ValueError('Input length error: Input array too short '
+                'for levels requested. Try requesting fewer levels '
+                'or use a longer input')
 
-    # Final array length is computed based on each level output being 
-    # increased to an even number of samples before the next level, 
-    # and the next level being half *that* number.
-    # For example, if the input was length 130, each increasing level output
-    # would be of length 65, 33, 17, 9, 5, 3.
-    # We find the final level length by considering the initial length as a float
-    # that is divided by 2 at each level. This is then rounded up to the nearest
-    # whole number, and this gives the length of the final output.
-    final_array_length = int(math.ceil(float(len(x))/2**levels))
+    if len(x) % 2**levels != 0:
+        raise ValueError('Input length error: The length of the input '
+                'array needs to have 2^levels as a factor.')
 
     # The next bit is concerned with the length of the single extension.
     # Obviously, we want it to be as short as possible (as much because it
@@ -449,104 +520,54 @@ def _1d_dtcwt_forward_single_extension(x, levels):
     # same but with p replaced by p+1 (since the filter is always even 
     # length).
     # 
-    
     p = (len(HL_14) - 1)//2
     q = len(biort_lo)//2
     
-    final_level_extra_samples = final_array_length - len(x)/2**levels
-    print 'foo', final_level_extra_samples
-
-    if levels > 1:
-        # The extra samples are needed on the final level *before*
-        # downsampling, so we have levels-1 downsamplings. This
-        # corresponds to adding 2**(levels-1) * final_level_extra_samples
-        # (0 -> n-1 downsamplings, where n = levels-1)
-        extra_samples = final_level_extra_samples * 2**(levels-1)
-    else:
-        # We don't need any extra samples in this case
-        extra_samples = 0
-
     pre_extension_length = p*(1-2**(levels))/(1-2) - p + q
     post_extension_length = ((p+1)*(1-2**(levels))/(1-2) - 
             (p+1) + q)
-
-    ##### The extension length should be even for the next stage to work.
-    ####extension_length += extension_length % 2
 
     extended_x = extend_1d(x, pre_extension_length, 
             post_extension_length=post_extension_length)
     
     _extended_lo = numpy.convolve(extended_x, biort_lo, mode='valid')
 
-    tree_a_extensions = []
-    tree_b_extensions = []
-
-    tree_a_extensions.append(
-            (extended_x[:pre_extension_length], extended_x[-post_extension_length:]))
-    tree_b_extensions.append(
-            (extended_x[:pre_extension_length], extended_x[-post_extension_length:]))
-
-    # len(biort_lo)//2 samples have been removed from the extension at both ends
+    # len(biort_lo)//2 samples have been removed from the 
+    # extension at both ends
     pre_extension_length -= len(biort_lo)//2
     post_extension_length -= len(biort_lo)//2
 
     # The two trees are separated from the extended low pass array.
-    # The tree a filter is one sample delayed from the tree b
+    # The tree b filter is one sample delayed from the tree a
     # filter (which is equivalent to just taking the output
     # from the 2nd sample). This also shortens the extension, but this
     # is dealt with inside the loop.
-    extended_tree_a_lo = _extended_lo[1::2]
-    extended_tree_b_lo = _extended_lo[::2]
+    extended_tree_a_lo = _extended_lo[0::2]
+    extended_tree_b_lo = _extended_lo[1::2]
 
-    # output.
+    # extension_removal_slicer chops off the extension of the
+    # output array for this level prior to downsampling.
     if post_extension_length == 0:
         extension_removal_slicer = slice(pre_extension_length, None)
     else:
         extension_removal_slicer = slice(pre_extension_length, 
                 -post_extension_length)
 
-    extended_tree_a_lo_list = []
-    extended_tree_b_lo_list = []
-
-    samples_until_ext_repeat = []
-    samples_until_ext_repeat.append(len(x))
-
-    pre_downsampled_tree_a_lo_list = []
-    pre_downsampled_tree_b_lo_list = []
-
-    pre_downsampled_extended_tree_b_lo_list = []
-    pre_downsampled_extended_tree_a_lo_list = []
-
-    tree_a_undownsampled_extensions = []
-    tree_b_undownsampled_extensions = []
-
-    extended_tree_a_lo_list.append(extended_tree_a_lo)
-    extended_tree_b_lo_list.append(extended_tree_b_lo)
-
-    pre_downsampled_extended_tree_b_lo_list.append(_extended_lo)
-    pre_downsampled_extended_tree_a_lo_list.append(_extended_lo)
-
-    tree_a_undownsampled_extensions.append(
-            (_extended_lo[:pre_extension_length], _extended_lo[-post_extension_length:]))
-    tree_b_undownsampled_extensions.append(
-            (_extended_lo[:pre_extension_length], _extended_lo[-post_extension_length:]))
-
-    pre_downsampled_tree_a_lo_list.append(_extended_lo[extension_removal_slicer][1:])
-    pre_downsampled_tree_b_lo_list.append(_extended_lo[extension_removal_slicer])
-
     _lo = _extended_lo[extension_removal_slicer]
 
     # data_length is the length of the downsampled data for each tree
     data_length = len(_lo)//2
 
-    # We separately extend and filter to find _hi. This is just because it's simpler
-    # for this stage than trying to work out the relevant offsets and so on, though it
-    # could easily be acquired from extended_x as in the case of _lo.
+    # We separately extend and filter to find _hi. This is just because 
+    # it's simpler for this stage than trying to work out the relevant 
+    # offsets and so on, though it could easily be acquired from 
+    # extended_x as in the case of _lo.
     _hi = extend_and_filter(x, biort_hi)
 
     # Write the first level to the respective outputs
-    # For the high pass filter, the tree b filter is one
-    # sample delayed from the tree a filter
+    # For the high pass filter, the tree-a filter is one
+    # sample delayed from the tree-b filter (remembering we're
+    # setting the tree-a hi output to be the imaginary part).
     hi.append(_hi[0::2] + 1j*_hi[1::2])
     scale.append(_lo)
 
@@ -556,32 +577,19 @@ def _1d_dtcwt_forward_single_extension(x, levels):
         pre_extension_length //= 2
         post_extension_length //= 2
 
-        tree_a_extensions.append(
-            (extended_tree_a_lo[:pre_extension_length], extended_tree_a_lo[-post_extension_length:]))
-        tree_b_extensions.append(
-            (extended_tree_b_lo[:pre_extension_length], extended_tree_b_lo[-post_extension_length:]))
-
         # Samples will be removed from the extension during each filtering,
         # of total length len(HL_14)
         pre_extension_length -= (len(HL_14) - 1)//2
         post_extension_length -= (len(HL_14))//2
 
+        # As before, extension_removal_slicer chops off the extension of the
+        # output array for this level prior to downsampling.
         if post_extension_length == 0:
             extension_removal_slicer = slice(pre_extension_length, None)
         else:
             extension_removal_slicer = slice(pre_extension_length, 
                     -post_extension_length)
 
-        
-            #elif extension_length - data_length % 2 == 0:
-            #extension_removal_slicer = slice(None)
-        #else:
-        #    # If data_length is not even, we need to add an extra sample
-        #    # onto each end of the data for when we downsample
-        #    extension_removal_slicer = slice(
-        #            extension_length - data_length % 2, 
-        #            -extension_length + (data_length % 2))
-        
         tree_a_hi = numpy.convolve(extended_tree_a_lo, H01a, 
                 mode='valid')[extension_removal_slicer][::2]
         tree_b_hi = numpy.convolve(extended_tree_b_lo, H01b, 
@@ -592,43 +600,23 @@ def _1d_dtcwt_forward_single_extension(x, levels):
         _extended_tree_b_lo = numpy.convolve(extended_tree_b_lo, H00b, 
                 mode='valid')
 
-        print 'ext length', pre_extension_length, post_extension_length
-        if post_extension_length != 0 or pre_extension_length != 0:
-            tree_a_undownsampled_extensions.append(
-                    (_extended_tree_a_lo[:pre_extension_length], _extended_tree_a_lo[-post_extension_length:]))
-            tree_b_undownsampled_extensions.append(
-                    (_extended_tree_b_lo[:pre_extension_length], _extended_tree_b_lo[-post_extension_length:]))
-
-        #print 'extension_removal_slicer =', repr(extension_removal_slicer)
-        #print 'pre_tree_a_lo =', repr(_extended_tree_a_lo[extension_removal_slicer])
         tree_a_lo = _extended_tree_a_lo[extension_removal_slicer][::2]
         tree_b_lo = _extended_tree_b_lo[extension_removal_slicer][::2]
 
-        pre_downsampled_tree_a_lo_list.append(_extended_tree_a_lo[extension_removal_slicer])
-        pre_downsampled_tree_b_lo_list.append(_extended_tree_b_lo[extension_removal_slicer])
-        
         # We get data_length from tree_a_lo, but this should be the same
         # as tree_b_lo, tree_a_hi and tree_b_hi.
         data_length = len(tree_a_lo)
         
-        # We need to shift by a sample if the pre_extension length is odd.
-        # This is to align with the actual data
-        #shift = pre_extension_length % 2
         extended_tree_a_lo = _extended_tree_a_lo[::2]
         extended_tree_b_lo = _extended_tree_b_lo[::2]
         
-        extended_tree_a_lo_list.append(extended_tree_a_lo)
-        extended_tree_b_lo_list.append(extended_tree_b_lo)
-        pre_downsampled_extended_tree_b_lo_list.append(_extended_tree_b_lo)
-        pre_downsampled_extended_tree_a_lo_list.append(_extended_tree_a_lo)
-
         # Create the interleaved scale array
         _scale = numpy.empty(len(tree_a_lo) + len(tree_b_lo))
-        _scale[1::2] = tree_a_lo
-        _scale[0::2] = tree_b_lo
+        _scale[0::2] = tree_a_lo
+        _scale[1::2] = tree_b_lo
 
         # Append the outputs
-        hi.append(tree_a_hi + 1j*tree_b_hi)
+        hi.append(tree_b_hi + 1j*tree_a_hi)
         scale.append(_scale)
 
     # lo is simply the final scale
@@ -638,30 +626,94 @@ def _1d_dtcwt_forward_single_extension(x, levels):
     hi = tuple(hi)
     scale = tuple(scale)
 
-    extras = {}
-    extras['a'] = {}
-    extras['a']['pre_downsampled_ext'] = pre_downsampled_extended_tree_a_lo_list
-    extras['a']['post_downsampled_ext'] = extended_tree_a_lo_list
-    extras['a']['pre_downsampled'] = pre_downsampled_tree_a_lo_list
-    extras['a']['extensions'] = tree_a_extensions    
-    extras['a']['undownsampled_filtered_extensions'] = tree_a_undownsampled_extensions
-
-    extras['b'] = {}
-    extras['b']['pre_downsampled_ext'] = pre_downsampled_extended_tree_b_lo_list
-    extras['b']['post_downsampled_ext'] = extended_tree_b_lo_list
-    extras['b']['pre_downsampled'] = pre_downsampled_tree_b_lo_list    
-    extras['b']['extensions'] = tree_b_extensions        
-    extras['b']['undownsampled_filtered_extensions'] = tree_b_undownsampled_extensions
-
-    return lo, hi, scale, extras
+    return lo, hi, scale
 
 
 def _1d_dtcwt_inverse(lo, hi):
     '''Implements the inverse 1D Dual-tree Complex Wavelet Transform.
     '''
-    pass
 
+    levels = len(hi)
 
+    # Extract each tree lo pass input from lo
+    tree_a_lo = lo[0::2]
+    tree_b_lo = lo[1::2]
+
+    pre_extension_length = (len(H01a)-1)//2
+    post_extension_length = (len(H01a))//2
+
+    for level in range(levels-1, 0, -1):
+        # Iterate from the top level down
+
+        # The trees are selected as they are created
+        # (that is, tree-a is the imaginary part and 
+        # tree-b is the real part).
+        tree_a_hi = hi[level].imag
+        tree_b_hi = hi[level].real
+
+        if len(tree_a_hi) != len(tree_a_lo):
+            # In this case, an additional sample was added during
+            # the forward DTCWT to maintain an even length array. 
+            # What follows is the opposite process to undo that
+            # operation. See the _1d_dtcwt_forward for more info.
+            _tree_a_lo = tree_b_lo[:-1]
+            tree_b_lo = tree_a_lo[1:]
+            tree_a_lo = _tree_a_lo
+
+        # The inverse filters are just the forward filters from
+        # the opposite tree, and extensions are the opposite tree,
+        # as per the forward transform.
+        # 
+        # We generate initially the two parts that are summed to
+        # create the lo pass input to the parent level.
+        #
+        tree_a_part_lo = extend_expand_and_filter(tree_a_lo, H00b, 
+                tree_b_lo[::-1], pre_extension_length, 
+                post_extension_length)
+
+        tree_a_part_hi = extend_expand_and_filter(tree_a_hi, H01b, 
+                tree_b_hi[::-1], pre_extension_length, 
+                post_extension_length)
+
+        tree_b_part_lo = extend_expand_and_filter(tree_b_lo, H00a, 
+                tree_a_lo[::-1], pre_extension_length, 
+                post_extension_length)
+        tree_b_part_hi = extend_expand_and_filter(tree_b_hi, H01a, 
+                tree_a_hi[::-1], pre_extension_length, 
+                post_extension_length)
+
+        # Now compute the lo arrays for the parent level
+        tree_a_lo = tree_a_part_lo + tree_a_part_hi
+        tree_b_lo = tree_b_part_lo + tree_b_part_hi
+
+    # Now deal with the bottom level
+    tree_a_hi = hi[0].imag
+    tree_b_hi = hi[0].real
+
+    if len(tree_a_hi) != len(tree_a_lo):
+        # As in the loop above, deal with the case in which the arrays
+        # were extended by a sample during the forward operation.
+        _tree_a_lo = tree_b_lo[:-1]
+        tree_b_lo = tree_a_lo[1:]
+        tree_a_lo = _tree_a_lo
+
+    _lo = numpy.zeros(len(tree_a_lo) * 2)
+    _hi = numpy.zeros(len(tree_a_hi) * 2)
+
+    _lo[0::2] = tree_a_lo
+    _lo[1::2] = tree_b_lo
+
+    _hi[0::2] = tree_b_hi
+    _hi[1::2] = tree_a_hi
+
+    x_part_hi = extend_and_filter(_hi, inv_biort_hi)
+    x_part_lo = extend_and_filter(_lo, inv_biort_lo)
+
+    # And this gives us the final output
+    x = x_part_hi + x_part_lo
+    
+    return x
+        
 def dtcwt_forward(x, levels):
     '''Take the Dual-Tree Complex Wavelet transform of the input
     array, `x`.
