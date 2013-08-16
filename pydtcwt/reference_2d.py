@@ -1,8 +1,9 @@
 import numpy
 import math
 
-from .reference import (H00a, H01a, H00b, H01b, biort_lo, biort_hi, 
-        extend_and_filter, extend_expand_and_filter)
+from .reference import (H00a, H01a, H00b, H01b, biort_lo, biort_hi,
+        inv_biort_lo, inv_biort_hi,extend_and_filter, 
+        extend_expand_and_filter)
 
 '''This module extends :mod:`pydtcwt.reference` to two dimensional 
 arrays.
@@ -12,7 +13,8 @@ than speed.
 '''
 
 def extend_and_filter_along_rows(a, kernel, extension_array=None, 
-        pre_extension_length=None, post_extension_length=None):
+        pre_extension_length=None, post_extension_length=None, 
+        expand_after_extending=False, expanded_first_sample_zero=True):
     '''1D filter each row of the array `a` with `kernel` and return a 
     2D array with the same number of columns. If `a` is 1D, the output 
     will still be a 2D, but it will have a single column.
@@ -21,6 +23,16 @@ def extend_and_filter_along_rows(a, kernel, extension_array=None,
     `extension_array` using :func:`pydtcwt.reference.extend_1d`. 
     If `extension_array` is None, `a[:, ::-1]` is used for the extension 
     (i.e. row reversed `a`).
+
+    Optionally, according to `expand_after_extending`, the array 
+    is two times upsampled along the rows after the extension, 
+    interlacing the data with zeros. `expanded_first_sample_zero`
+    dictates whether the first sample of the expanded version of 
+    `a` is 0, or whether it is the first element of `a`. See
+    :func:`reference.extend_expand_and_filter` for the one-dimensional
+    explanation of this (which this function simply repeats over each
+    row). Note that `expanded_first_sample_zero` only has any influence
+    when `expand_after_extending` is True.
 
     `extension_array` must have the same number of columns as `a`.
 
@@ -49,9 +61,15 @@ def extend_and_filter_along_rows(a, kernel, extension_array=None,
 
     for (row_idx, (each_row, each_extension_row)) in enumerate(
             zip(a, extension_array)):
-        output_row = extend_and_filter(each_row, kernel, 
-                each_extension_row, pre_extension_length, 
-                post_extension_length)
+
+        if expand_after_extending:
+            output_row = extend_expand_and_filter(each_row, kernel, 
+                    each_extension_row, pre_extension_length, 
+                    post_extension_length, expanded_first_sample_zero)
+        else:
+            output_row = extend_and_filter(each_row, kernel, 
+                    each_extension_row, pre_extension_length, 
+                    post_extension_length)
 
         try:
             filtered_a
@@ -64,9 +82,10 @@ def extend_and_filter_along_rows(a, kernel, extension_array=None,
     return filtered_a
 
 def extend_and_filter_along_cols(a, kernel, extension_array=None, 
-        pre_extension_length=None, post_extension_length=None):
+        pre_extension_length=None, post_extension_length=None, 
+        expand_after_extending=False, expanded_first_sample_zero=True):
     '''Like :func:`extend_and_filter_along_rows` but operates on the 
-    columns of the input array.
+    columns of the input array rather than the rows.
     '''
 
     # We just use extend_and_filter_along_rows but with a transposed
@@ -79,9 +98,90 @@ def extend_and_filter_along_cols(a, kernel, extension_array=None,
         transposed_extension = numpy.atleast_2d(extension_array).transpose()
 
     transposed_out = extend_and_filter_along_rows(transposed_a, kernel, 
-            transposed_extension, pre_extension_length, post_extension_length)
+            transposed_extension, pre_extension_length, post_extension_length,
+            expand_after_extending, expanded_first_sample_zero)
 
     return transposed_out.transpose()
+
+
+def _extend_and_filter_along_rows_and_cols(lolo, 
+        row_filters, col_filters, expand=False):
+    '''A nested function to do filtering along both rows and columns 
+    of a given set of four low pass inputs. This function either decimates
+    the filtered result by two, or twice expands the result by inserting
+    zeros prior to filtering. The decimation is used in the forward
+    DTCWT and the expansion in the inverse.
+
+    `lolo` is a dictionary to datasets, with keys given by
+    all the 2-tuple permutations of (`h`, `g`) (so 4 entries
+    in all). The first entry corresponds to the column and the
+    second to the rows. `h` or `g` denotes which filter was used
+    to derive the dataset (corresponding to each tree).
+
+    `row_filters` is a dictionary with keys `h` and `g` corresponding
+    to which filter is used on the rows for the `h` and `g`
+    trees respectively.
+
+    `col_filters` is equivalent to `row_filters` but for the columns.
+
+    `expand` is a boolean dictating whether the output is expanded 
+    or decimated. If `expand` equates to `False` (the default) then 
+    the output is decimated, otherwise if it equates to `True` the
+    output is expanded.
+
+    The point of this function is that it is necessary to interleave 
+    the row and column filterings for each tree as the row and column 
+    trees are inherently interleaved. There are 4 interleaved inputs 
+    for 4 interleaved outputs (the four arrangements of the two trees
+    across rows and columns) for set of filterings.
+    Pragmatically, this means that in order to get the correct
+    extensions for the column filtering, we need to have done all
+    the necessary row filtering (or vice-versa depending on the 
+    the order of row/column filtering), hence this function.
+    '''
+
+    # opp is simply a dictionary to look up the opposite tree
+    opp = {'h': 'g', 'g': 'h'}
+
+    pre_extension_length = (len(row_filters['h'])-1)//2
+    post_extension_length = (len(col_filters['h']))//2
+
+    # firstly, filter along the rows
+    row_filtered = {}        
+    for col in ('h', 'g'):
+        for row in ('h', 'g'):
+            data = numpy.atleast_2d(lolo[(col, row)])
+            extension = numpy.atleast_2d(lolo[(col, opp[row])])
+
+            if expand:
+                row_filtered[(col, row)] = extend_and_filter_along_rows(
+                        data, row_filters[row], extension[:, ::-1],
+                        pre_extension_length, post_extension_length,
+                        expand_after_extending=True)
+            else:
+                row_filtered[(col, row)] = extend_and_filter_along_rows(
+                        data, row_filters[row], extension[:, ::-1],
+                        pre_extension_length, post_extension_length)[:, ::2]
+    
+    row_filtered[('h', 'g')]
+    # now filter along the columns
+    filtered = {}
+    for col in ('h', 'g'):
+        for row in ('h', 'g'):
+
+            if expand:
+                filtered[(col, row)] = extend_and_filter_along_cols(
+                        row_filtered[(col, row)], col_filters[col], 
+                        row_filtered[(opp[col], row)][::-1, :],
+                        pre_extension_length, post_extension_length,
+                        expand_after_extending=True)
+            else:
+                filtered[(col, row)] = extend_and_filter_along_cols(
+                        row_filtered[(col, row)], col_filters[col], 
+                        row_filtered[(opp[col], row)][::-1, :],
+                        pre_extension_length, post_extension_length)[::2, :]
+
+    return filtered
 
 def _2d_dtcwt_forward(x, levels):
     '''Implements the forward 2D Dual-tree Complex Wavelet Transform.
@@ -90,13 +190,8 @@ def _2d_dtcwt_forward(x, levels):
     of the DTCWT that should be taken.
 
     This implementation is not identical to that described in the 
-    various papers. Specifically, the a-tree defines the imaginary
-    part and the b-tree defines the real part of the high pass output.
-    This is largely arbitrary, though it does have an impact on the phase
-    response of the output (and changing it requires making sure all the
-    phases are consistent). The reason for implementing as described is
-    to keep the output consistent with Nick Kingsbury's original dtcwt
-    toolbox.
+    various papers. The implemention is designed to keep the output 
+    consistent with Nick Kingsbury's original dtcwt toolbox.
     '''
 
     # We firstly define a pair of nested functions. These are specific
@@ -160,58 +255,6 @@ def _2d_dtcwt_forward(x, levels):
 
         return output
 
-    def _extend_and_filter_along_rows_and_cols(lolo, 
-            row_filters, col_filters):
-        '''A nested function to do filtering along both rows and columns 
-        of a given set of four low pass inputs.
-
-        `lolo` is a dictionary to datasets, with keys given by
-        all the 2-tuple permutations of (`h`, `g`) (so 4 entries
-        in all). The first entry corresponds to the column and the
-        second to the rows. `h` or `g` denotes which filter was used
-        to derive the dataset (corresponding to each tree).
-
-        `row_filters` is a dictionary with keys `h` and `g` corresponding
-        to which filter is used on the rows for the `h` and `g`
-        trees respectively.
-
-        `col_filters` is equivalent to `row_filters` but for the columns.
-
-        The point is that it is necessary to interleave the row and
-        column filterings for each tree as the row and column trees are
-        inherently interleaved. There are 4 interleaved inputs for
-        4 interleaved outputs (the four arrangements of the two trees
-        across rows and columns) for set of filterings.
-        Pragmatically, this means that in order to get the correct
-        extensions for the column filtering, we need to have done all
-        the necessary row filtering (or vice-versa depending on the 
-        the order of row/column filtering), hence this function.
-        '''
-
-        # opp is simply a dictionary to look up the opposite tree
-        opp = {'h': 'g', 'g': 'h'}
-
-        # firstly, filter along the rows
-        row_filtered = {}        
-        for col in ('h', 'g'):
-            for row in ('h', 'g'):
-                row_filtered[(col, row)] = extend_and_filter_along_rows(
-                        lolo[(col, row)], row_filters[row], 
-                        lolo[(col, opp[row])][:, ::-1],
-                        pre_extension_length, post_extension_length)[:, ::2]
-        
-        # now filter along the columns
-        filtered = {}
-        for col in ('h', 'g'):
-            for row in ('h', 'g'):
-                filtered[(col, row)] = extend_and_filter_along_cols(
-                        row_filtered[(col, row)], col_filters[col], 
-                        row_filtered[(opp[col], row)][::-1, :],
-                        pre_extension_length, post_extension_length)[::2, :]
-
-        return filtered
-
-
     hi = []
     scale = []
 
@@ -227,7 +270,6 @@ def _2d_dtcwt_forward(x, levels):
     if x.shape[0] % 2 == 1:
         # add a row
         x = numpy.concatenate((x, x[-1:, :]), axis=0)
-
 
     # We start by filtering along the rows. So far, it is
     # basically the same as the 1D case!
@@ -284,9 +326,6 @@ def _2d_dtcwt_forward(x, levels):
     # We output scale before decimation as this corresponds to the same
     # output generated by NGK's toolbox (with the lolo outputs interleaved)
     scale.append(_lolo)
-
-    pre_extension_length = (len(H01a)-1)//2
-    post_extension_length = (len(H01a))//2
 
     # Now we iterate over the remaining (q-shift) levels
     for level in range(1, levels):
@@ -371,6 +410,156 @@ def _2d_dtcwt_forward(x, levels):
 
     return lo, hi, scale
 
+def _2d_dtcwt_inverse(lo, hi):
+    '''Computes the 2d inverse DTCWT from lo and hi inputs.
+
+    Algorithmically, it reverses the forward transform.
+    '''
+
+    def _extract_from_complex_inputs(hi):
+        '''Performs the reverse operation of
+        :func:_create_high_pass_complex_outputs nested in _2d_dtcwt_forward.
+
+        Given an input `hi`, it extracts the sub arrays that were used to
+        construct it. See that function and the code of this function for
+        more understanding about exactly what is being done.
+        '''
+
+        orientations = {
+                15: ('hi', 'lo'), 
+                45: ('hi', 'hi'), 
+                75: ('lo', 'hi')}
+
+        # From the forward operation, each orientation has two wavelets 
+        # given by:
+        # pos_orientation, p = 1/sqrt(2) * ( (a - b) + j(c + d) )
+        # neg_orientation, q = 1/sqrt(2) * ( (a + b) + j(c - d) )
+        # 
+        # This means we can extract a, b, c and d as follows:
+        # a = 1/sqrt(2) * real(q + p)
+        # b = 1/sqrt(2) * real(q - p)
+        # c = 1/sqrt(2) * imag(p + q)
+        # d = 1/sqrt(2) * imag(p - q)
+        # 
+        # a, b, c and d are arranged by wavelet_arrangement below.
+        # Each tuple in the dictionary provides the keys to datasets
+        # into which (a, b, c, d) should be inserted. 
+        # That is, if the first entry in the tuple
+        # is ('g', 'h'), then data[('g', 'h')] will be set to be `a` where
+        # data is a particular output
+        wavelet_arrangement = {
+                ('lo', 'hi'): (('g','h'), ('h','g'), ('g','g'), ('h','h')),
+                ('hi', 'lo'): (('h','g'), ('g','h'), ('h','h'), ('g','g')),
+                ('hi', 'hi'): (('h','h'), ('g','g'), ('h','g'), ('g','h'))}
+
+        outputs = {}
+        for orientation in orientations:
+            filters = orientations[orientation]
+            p = hi[orientation]
+            q = hi[-orientation]
+
+            a = 1/math.sqrt(2) * (q + p).real
+            b = 1/math.sqrt(2) * (q - p).real
+            c = 1/math.sqrt(2) * (p + q).imag
+            d = 1/math.sqrt(2) * (p - q).imag
+
+            outputs[filters] = dict(
+                    zip(wavelet_arrangement[filters], (a, b, c, d)))
+
+        hilo = outputs[('hi', 'lo')]
+        lohi = outputs[('lo', 'hi')]
+        hihi = outputs[('hi', 'hi')]
+
+        return hilo, lohi, hihi
+
+    levels = len(hi)
+
+    # The following pair of little dictionaries is simply to look up
+    # which value of the filtered signal we need to start at when
+    # extracting the decimated signal.
+    hi_start = {'h': 0, 'g': 1}
+    lo_start = {'h': 1, 'g': 0}
+
+    lolo = {}
+
+    # Start by extracting lolo
+    for row in ('h', 'g'):
+        for col in ('h', 'g'):
+            lolo[(col, row)] = lo[lo_start[col]::2, lo_start[row]::2]
+
+    for level in range(levels-1, 0, -1):
+
+        hilo, lohi, hihi = _extract_from_complex_inputs(hi[level])
+
+        # We now want to compute the next level lolo from 
+        # the extracted complex hi inputs and the previous lolo.
+        # 
+        # Note that for every set of row or column filters, there
+        # are two parts that use the same set. This means there is
+        # an easy efficiency to be gained by performing a pair of 
+        # summations after (in this case) the row filtering but before
+        # the column filtering. We don't do that here to maintain
+        # clarity and code simplicity.
+        lolo_part1 = _extend_and_filter_along_rows_and_cols(
+                hihi, {'h': H01a, 'g': H01b}, {'h': H01a, 'g': H01b}, 
+                expand=True)
+
+        lolo_part2 = _extend_and_filter_along_rows_and_cols(
+                hilo, {'h': H00a, 'g': H00b}, {'h': H01a, 'g': H01b},
+                expand=True)
+
+        lolo_part3 = _extend_and_filter_along_rows_and_cols(
+                lohi, {'h': H01a, 'g': H01b}, {'h': H00a, 'g': H00b},
+                expand=True)
+
+        lolo_part4 = _extend_and_filter_along_rows_and_cols(
+                lolo, {'h': H00a, 'g': H00b}, {'h': H00a, 'g': H00b},
+                expand=True)
+
+        lolo = {}
+
+        for each in lolo_part1:
+            # See above - two parts can be summed during the
+            # filtering process above to reduce the computational
+            # complexity.
+            lolo[each] = (lolo_part1[each] + lolo_part2[each]
+                    + lolo_part3[each] + lolo_part4[each])
+
+
+    # Now work on the top level
+    hilo, lohi, hihi = _extract_from_complex_inputs(hi[0])
+
+    lolo_shape = lolo['h', 'h'].shape
+    lolo_dtype = lolo['h', 'h'].dtype
+
+    _lolo = numpy.empty((lolo_shape[0]*2, lolo_shape[1]*2), 
+            dtype=lolo_dtype)
+
+    _hilo = numpy.empty(_lolo.shape, dtype=_lolo.dtype)
+    _lohi = numpy.empty(_lolo.shape, dtype=_lolo.dtype)
+    _hihi = numpy.empty(_lolo.shape, dtype=_lolo.dtype)
+
+    for row in ('h', 'g'):
+        for col in ('h', 'g'):
+            _lolo[lo_start[col]::2, lo_start[row]::2] = lolo[(col, row)]
+            _hilo[hi_start[col]::2, lo_start[row]::2] = hilo[(col, row)]
+            _lohi[lo_start[col]::2, hi_start[row]::2] = lohi[(col, row)]
+            _hihi[hi_start[col]::2, hi_start[row]::2] = hihi[(col, row)]
+
+    col_part1 = extend_and_filter_along_cols(_hihi, inv_biort_hi)
+    col_part2 = extend_and_filter_along_cols(_lohi, inv_biort_lo)    
+    col_part3 = extend_and_filter_along_cols(_hilo, inv_biort_hi)
+    col_part4 = extend_and_filter_along_cols(_lolo, inv_biort_lo)
+
+    out_part1 = extend_and_filter_along_rows(col_part1 + col_part2,
+            inv_biort_hi)
+    out_part2 = extend_and_filter_along_rows(col_part3 + col_part4,
+            inv_biort_lo)
+
+    out = out_part1 + out_part2
+
+    return out
+
 
 def dtcwt_forward(x, levels):
     '''Take the 2D Dual-Tree Complex Wavelet transform of the input
@@ -381,3 +570,21 @@ def dtcwt_forward(x, levels):
     
     if x.ndim == 1 or x.ndim == 2:
         return _2d_dtcwt_forward(x, levels)
+
+    else:
+        raise ValueError('Invalid input shape The input must be '
+                'one- or two-dimensional')
+
+def dtcwt_inverse(lo, hi):
+    '''Take the inverse 2D Dual-Tree Complex Wavelet transform of the 
+    input arrays, `lo` and `hi`.
+
+    `levels` is how many levels should be computed.
+    '''
+    
+    if lo.ndim == 1 or lo.ndim == 2:
+        return _2d_dtcwt_inverse(lo, hi)
+
+    else:
+        raise ValueError('Invalid input shape: The input must be '
+                'one- or two-dimensional')

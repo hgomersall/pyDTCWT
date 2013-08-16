@@ -686,7 +686,7 @@ def _1d_dtcwt_inverse(lo, hi):
         tree_a_lo = tree_a_part_lo + tree_a_part_hi
         tree_b_lo = tree_b_part_lo + tree_b_part_hi
 
-    # Now deal with the bottom level
+    # Now deal with the top level
     tree_a_hi = hi[0].imag
     tree_b_hi = hi[0].real
 
@@ -697,8 +697,8 @@ def _1d_dtcwt_inverse(lo, hi):
         tree_b_lo = tree_a_lo[1:]
         tree_a_lo = _tree_a_lo
 
-    _lo = numpy.zeros(len(tree_a_lo) * 2)
-    _hi = numpy.zeros(len(tree_a_hi) * 2)
+    _lo = numpy.empty(len(tree_a_lo) * 2, dtype=tree_a_lo.dtype)
+    _hi = numpy.empty(len(tree_a_hi) * 2, dtype=tree_a_hi.dtype)
 
     _lo[0::2] = tree_a_lo
     _lo[1::2] = tree_b_lo
@@ -721,8 +721,12 @@ def dtcwt_forward(x, levels):
     `levels` is how many levels should be computed.
     '''
     
-    if len(x.shape) == 1:
+    if x.ndim == 1:
         return _1d_dtcwt_forward(x, levels)
+
+    else:
+        raise ValueError('Invalid input shape The input must be '
+                'one-dimensional')
 
 def dtcwt_inverse(lo, hi):
     '''Take the inverse Dual-Tree Complex Wavelet transform of the 
@@ -731,6 +735,10 @@ def dtcwt_inverse(lo, hi):
     `levels` is how many levels should be computed.
     '''
     
-    if len(lo.shape) == 1:
+    if lo.ndim == 1:
         return _1d_dtcwt_inverse(lo, hi)
+
+    else:
+        raise ValueError('Invalid input shape: The input must be '
+                'one-dimensional')
 
