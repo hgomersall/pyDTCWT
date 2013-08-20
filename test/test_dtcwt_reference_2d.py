@@ -353,7 +353,7 @@ class Test2DDTCWT(TestCasePy3):
                     allow_odd_length_dimensions=True)
 
             # And the non-keyword case
-            self.dtcwt_forward_function(input_array, levels, True)
+            self.dtcwt_forward_function(input_array, levels, 14, True)
 
 
     def test_2d_DTCWT_forward_against_data(self):
@@ -366,10 +366,10 @@ class Test2DDTCWT(TestCasePy3):
             test_data = numpy.load(each_file)
 
             assert(test_data['biort'] == 'antonini')
-            assert(test_data['qshift'] == 'qshift_14')
 
             input_array = test_data['X']
             levels = test_data['levels']
+            qshift_length = int(test_data['qshift_length'])
 
             ref_lo = test_data['lo']
             ref_hi = test_data['hi']
@@ -383,14 +383,12 @@ class Test2DDTCWT(TestCasePy3):
                     input_shape[0] % 2 != 0 or input_shape[1] % 2 != 0):
 
                 lo, hi, scale = self.dtcwt_forward_function(
-                        input_array, levels, True)
+                        input_array, levels, qshift_length=qshift_length,
+                        allow_odd_length_dimensions=True)
 
             else:
                 lo, hi, scale = self.dtcwt_forward_function(
-                        input_array, levels)
-
-            if not numpy.allclose(lo, ref_lo):
-                print input_array.shape, levels, ref_lo.shape, lo.shape
+                        input_array, levels, qshift_length=qshift_length)
 
             self.assertTrue(numpy.allclose(lo, ref_lo))
 
@@ -422,29 +420,36 @@ class Test2DDTCWT(TestCasePy3):
                 ((192, 35), 5),
                 ((36, 27), 4))
 
+        qshift_filter_lengths = (14, 16)
+
         for input_shape, levels in datasets:
 
             input_array = numpy.random.randn(*input_shape)
 
-            if (len(input_shape) == 1 or 
-                    input_shape[0] % 2 != 0 or input_shape[1] % 2 != 0):
+            for qshift_length in qshift_filter_lengths:
+                if (len(input_shape) == 1 or 
+                        input_shape[0] % 2 != 0 or input_shape[1] % 2 != 0):
 
-                lo, hi, scale = self.dtcwt_forward_function(
-                        input_array, levels, True)
+                    lo, hi, scale = self.dtcwt_forward_function(
+                            input_array, levels, 
+                            qshift_length=qshift_length,
+                            allow_odd_length_dimensions=True)
 
-            else:
-                lo, hi, scale = self.dtcwt_forward_function(
-                        input_array, levels)
+                else:
+                    lo, hi, scale = self.dtcwt_forward_function(
+                            input_array, levels, 
+                            qshift_length=qshift_length)
 
-            test_output = reference_2d.dtcwt_inverse(lo, hi)
+                test_output = reference_2d.dtcwt_inverse(lo, hi,
+                        qshift_length=qshift_length)
 
-            if input_shape[0] % 2 != 0:
-                test_output = test_output[:-1, :]
+                if input_shape[0] % 2 != 0:
+                    test_output = test_output[:-1, :]
 
-            if len(input_shape) != 1 and input_shape[1] % 2 != 0:
-                test_output = test_output[:, :-1]
+                if len(input_shape) != 1 and input_shape[1] % 2 != 0:
+                    test_output = test_output[:, :-1]
 
-            self.assertTrue(numpy.allclose(input_array, test_output))
+                self.assertTrue(numpy.allclose(input_array, test_output))
 
 class TestDTCWTReference2DMisc(TestCasePy3):
     ''' Other miscellaneous functions in reference_2d

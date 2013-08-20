@@ -1,9 +1,8 @@
 import numpy
 import math
 
-from .reference import (H00a, H01a, H00b, H01b, biort_lo, biort_hi,
-        inv_biort_lo, inv_biort_hi,extend_and_filter, 
-        extend_expand_and_filter)
+from .reference import (biort_lo, biort_hi, inv_biort_lo, inv_biort_hi,
+        _generate_qshift_filters, extend_and_filter, extend_expand_and_filter)
 
 '''This module extends :mod:`pydtcwt.reference` to two dimensional 
 arrays.
@@ -183,11 +182,14 @@ def _extend_and_filter_along_rows_and_cols(lolo,
 
     return filtered
 
-def _2d_dtcwt_forward(x, levels):
+def _2d_dtcwt_forward(x, levels, qshift_length=14):
     '''Implements the forward 2D Dual-tree Complex Wavelet Transform.
 
     `x` is the input array and `levels` is the number of levels
     of the DTCWT that should be taken.
+
+    `qshift_length` is the length of the qshift filters used for
+    levels 2 and above.
 
     This implementation is not identical to that described in the 
     various papers. The implemention is designed to keep the output 
@@ -295,6 +297,8 @@ def _2d_dtcwt_forward(x, levels):
         new_lolo[('g', 'g')] = _lolo_gg
 
         return new_lolo
+
+    H00a, H01a, H00b, H01b = _generate_qshift_filters(qshift_length)
 
     hi = []
     scale = []
@@ -418,8 +422,12 @@ def _2d_dtcwt_forward(x, levels):
 
     return lo, hi, scale
 
-def _2d_dtcwt_inverse(lo, hi):
-    '''Computes the 2d inverse DTCWT from lo and hi inputs.
+def _2d_dtcwt_inverse(lo, hi, qshift_length=14):
+    '''Computes the 2d inverse DTCWT from `lo` and `hi` inputs.
+
+    `qshift_length` is the length of the qshift filters used for
+    levels 2 and above, and for perfect reconstruction should be
+    the same as that used during the forward transform.
 
     Algorithmically, it reverses the forward transform.
     '''
@@ -515,6 +523,7 @@ def _2d_dtcwt_inverse(lo, hi):
 
         return new_lolo
 
+    H00a, H01a, H00b, H01b = _generate_qshift_filters(qshift_length)    
        
     levels = len(hi)
 
@@ -624,11 +633,16 @@ def _2d_dtcwt_inverse(lo, hi):
     return out
 
 
-def dtcwt_forward(x, levels, allow_odd_length_dimensions=False):
+def dtcwt_forward(x, levels, qshift_length=14, 
+        allow_odd_length_dimensions=False):
     '''Take the 2D Dual-Tree Complex Wavelet transform of the input
     array, `x`.
 
     `levels` is how many levels should be computed.
+
+    `qshift_length` is the length of the qshift filters used for
+    levels 2 and above, and for perfect reconstruction should be
+    the same as that used during the forward transform.
 
     If `x` has an odd number of either rows or columns, then
     a `ValueError` exception is raised. Setting `allow_odd_length_dimensions`
@@ -652,21 +666,25 @@ def dtcwt_forward(x, levels, allow_odd_length_dimensions=False):
                     'with the allow_odd_length_dimensions argument.')
 
         else:
-            return _2d_dtcwt_forward(x, levels)
+            return _2d_dtcwt_forward(x, levels, qshift_length=qshift_length)
 
     else:
         raise ValueError('Invalid input shape The input must be '
                 'one- or two-dimensional')
 
-def dtcwt_inverse(lo, hi):
+def dtcwt_inverse(lo, hi, qshift_length=14):
     '''Take the inverse 2D Dual-Tree Complex Wavelet transform of the 
     input arrays, `lo` and `hi`.
+
+    `qshift_length` is the length of the qshift filters used for
+    levels 2 and above, and for perfect reconstruction should be
+    the same as that used during the forward transform.
 
     `levels` is how many levels should be computed.
     '''
     
     if lo.ndim == 1 or lo.ndim == 2:
-        return _2d_dtcwt_inverse(lo, hi)
+        return _2d_dtcwt_inverse(lo, hi, qshift_length=qshift_length)
 
     else:
         raise ValueError('Invalid input shape: The input must be '

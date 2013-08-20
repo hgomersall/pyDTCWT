@@ -52,30 +52,35 @@ inv_biort_lo[0::2] *= -1
 # Discussion Meeting on "Wavelets: the key to intermittent 
 # information?", London, February 24-25, 1999. See section 6.)
 #
-# The following is a length-14 example
-HL_14 = numpy.array([
-    0.0032531427636532, -0.0038832119991585, 0.0346603468448535, 
-    -0.0388728012688278, -0.1172038876991153, 0.2752953846688820, 
-    0.7561456438925225, 0.5688104207121227, 0.0118660920337970, 
-    -0.1067118046866654, 0.0238253847949203, 0.0170252238815540, 
-    -0.0054394759372741, -0.0045568956284755])
+# The following is a dictionary of different lengths. The key
+# is an integer giving the filter length.
+HL = {
+        14: numpy.array([
+            0.0032531427636532, -0.0038832119991585, 0.0346603468448535, 
+            -0.0388728012688278, -0.1172038876991153, 0.2752953846688820, 
+            0.7561456438925225, 0.5688104207121227, 0.0118660920337970, 
+            -0.1067118046866654, 0.0238253847949203, 0.0170252238815540, 
+            -0.0054394759372741, -0.0045568956284755]),
+        16: numpy.array([
+            -0.0047616119384559, -0.0004460227892623, -0.0000714419732797, 
+            0.0349146123068422, -0.0372738957998980, -0.1159114574274408, 
+            0.2763686431330317, 0.7563937651990367, 0.5671344841001330, 
+            0.0146374059644733, -0.1125588842575220, 0.0222892632669227, 
+            0.0184986827241562, -0.0072026778782583, -0.0002276522058978, 
+            0.0024303499451487])
+        }
 
-HL_16 = numpy.array([
-    -0.0047616119384559, -0.0004460227892623, -0.0000714419732797, 
-    0.0349146123068422, -0.0372738957998980, -0.1159114574274408, 
-    0.2763686431330317, 0.7563937651990367, 0.5671344841001330, 
-    0.0146374059644733, -0.1125588842575220, 0.0222892632669227, 
-    0.0184986827241562, -0.0072026778782583, -0.0002276522058978, 
-    0.0024303499451487])
 
-
-def _generate_qshift_filters(HL):
+def _generate_qshift_filters(qshift_length):
     # Here we create the qshift filters from HL
     # This uses the same notation as [Kingsbury_99] (albeit allowing for
     # the lack of suffixes) and is taken from that paper, section 6.
     #
+    # Grab the HL we want
+    _HL = HL[qshift_length]
+
     # Low pass tree-b filter first. This is simply HL.
-    H00b = HL.copy()
+    H00b = _HL.copy()
 
     # Low pass tree-a filter. This is simply the same as H00b but with
     # all the samples reverse. This is equivalent to mirroring the signal
@@ -85,12 +90,16 @@ def _generate_qshift_filters(HL):
     # The is equivalent to z^{-1}HL(z^{-1}) (as described in [Kinsbury_99])
     H00a = H00b[::-1].copy()
 
-    # The high pass filter for tree a is simply the odd samples (defined
-    # with respect to the t=0 sample) of HL negated
-    # This is equivalent to HL(-z)
-    _odd_start = (len(HL)//2 + 1) % 2 # The first odd sample in the array
-    _temp = HL.copy()
-    _temp[_odd_start::2] = -_temp[_odd_start::2]
+    # The high pass filter for tree a is simply the odd samples of HL 
+    # negated. This is equivalent to HL(-z)
+
+    ##_odd_start = (len(_HL)//2 + 1) % 2 # The first odd sample in the array
+    ##_temp = _HL.copy()
+    ##_temp[_odd_start::2] = -_temp[_odd_start::2]
+
+    # I need to understand this better...
+    _temp = _HL.copy()
+    _temp[::2] = -_temp[::2]
     H01a = _temp
 
     # The high pass filter for tree b is then the time reversed and 
@@ -100,8 +109,6 @@ def _generate_qshift_filters(HL):
     H01b = H01a[::-1].copy()
 
     return H00a, H01a, H00b, H01b
-
-H00a, H01a, H00b, H01b = _generate_qshift_filters(HL_14)
 
 def extend_1d(a, pre_extension_length, extension_array=None, 
         post_extension_length=None):
@@ -313,11 +320,14 @@ def extend_expand_and_filter(a, kernel, extension_array=None,
 
     return filtered_exp_ext_a
 
-def _1d_dtcwt_forward(x, levels):
+def _1d_dtcwt_forward(x, levels, qshift_length=14):
     '''Implements the forward 1D Dual-tree Complex Wavelet Transform.
 
     `x` is the input array and `levels` is the number of levels
     of the DTCWT that should be taken.
+
+    `qshift_length` is the length of the qshift filters used for
+    levels 2 and above.
 
     This implementation is not identical to that described in the 
     various papers. Specifically, the a-tree defines the imaginary
@@ -328,6 +338,9 @@ def _1d_dtcwt_forward(x, levels):
     to keep the output consistent with Nick Kingsbury's original dtcwt
     toolbox.
     '''
+    # Grab the filters
+    H00a, H01a, H00b, H01b = _generate_qshift_filters(qshift_length)
+
     hi = []
     scale = []
 
@@ -418,7 +431,7 @@ def _1d_dtcwt_forward(x, levels):
     return lo, hi, scale
 
 
-def _1d_dtcwt_forward_single_extension(x, levels):
+def _1d_dtcwt_forward_single_extension(x, levels, qshift_length=14):
     '''Implements a version of the forward 1D Dual-tree Complex 
     Wavelet Transform.
 
@@ -430,6 +443,9 @@ def _1d_dtcwt_forward_single_extension(x, levels):
 
     `x` is the input array and `levels` is the number of levels
     of the DTCWT that should be taken. The length of `x` must be even.
+
+    `qshift_length` is the length of the qshift filters used for
+    levels 2 and above.
 
     The only mild restriction on the number of levels compared to the
     length of the imput array `x` is that 2^levels must not be less
@@ -480,6 +496,8 @@ def _1d_dtcwt_forward_single_extension(x, levels):
     That is, all outputs from this function can be used with 
     :func:`_1d_dtcwt_inverse` to compute the inverse.
     '''
+    # Grab the filters
+    H00a, H01a, H00b, H01b = _generate_qshift_filters(qshift_length)
 
     hi = []
     scale = []
@@ -506,14 +524,14 @@ def _1d_dtcwt_forward_single_extension(x, levels):
     # (it's odd).
     # For each subsequent layer, we halve the size of the extension. 
     # We require the final top-level filtering to have a pre-extension 
-    # of len(HL_14 - 1)//2 and post-extension of len(HL_14)//2.
+    # of len(HL - 1)//2 and post-extension of len(HL)//2.
     # There are `levels` downsamplings so we need 
-    # 2**(levels) * len(HL_14 - 1)//2 pre-extension samples and  
-    # 2**(levels) * len(HL_14)//2 post-extension samples to leave enough 
+    # 2**(levels) * len(HL - 1)//2 pre-extension samples and  
+    # 2**(levels) * len(HL)//2 post-extension samples to leave enough 
     # for the top-level.
     #
     # For each level, we lose half the filter length, and then we downsample.
-    # If we say p = len(HL_14 - 1)//2 and q = len(biort_lo)//2
+    # If we say p = len(HL - 1)//2 and q = len(biort_lo)//2
     # then the extension length needs to be:
     # q + p*2 + p*2^2 + p*2^3 + ... + p*2^(levels-1)
     # This is simply an arithmetic series (swapping the first p for a q):
@@ -523,7 +541,7 @@ def _1d_dtcwt_forward_single_extension(x, levels):
     # same but with p replaced by p+1 (since the filter is always even 
     # length).
     # 
-    p = (len(HL_14) - 1)//2
+    p = (len(H00a) - 1)//2
     q = len(biort_lo)//2
     
     pre_extension_length = p*(1-2**(levels))/(1-2) - p + q
@@ -581,9 +599,9 @@ def _1d_dtcwt_forward_single_extension(x, levels):
         post_extension_length //= 2
 
         # Samples will be removed from the extension during each filtering,
-        # of total length len(HL_14)
-        pre_extension_length -= (len(HL_14) - 1)//2
-        post_extension_length -= (len(HL_14))//2
+        # of total length len(H00a) (which is the same as len(H01a), etc
+        pre_extension_length -= (len(H00a) - 1)//2
+        post_extension_length -= (len(H00a))//2
 
         # As before, extension_removal_slicer chops off the extension of the
         # output array for this level prior to downsampling.
@@ -632,8 +650,13 @@ def _1d_dtcwt_forward_single_extension(x, levels):
     return lo, hi, scale
 
 
-def _1d_dtcwt_inverse(lo, hi):
-    '''Implements the inverse 1D Dual-tree Complex Wavelet Transform.
+def _1d_dtcwt_inverse(lo, hi, qshift_length=14):
+    '''Implements the inverse 1D Dual-tree Complex Wavelet Transform
+    from `lo` and `hi` inputs.
+
+    `qshift_length` is the length of the qshift filters used for
+    levels 2 and above, and for perfect reconstruction should be
+    the same as that used during the forward transform.
     '''
 
     def _remove_additional_samples(tree_a_lo, tree_b_lo):
@@ -647,6 +670,9 @@ def _1d_dtcwt_inverse(lo, hi):
         tree_a_lo = _tree_a_lo
 
         return tree_a_lo, tree_b_lo
+
+    # Grab the filters
+    H00a, H01a, H00b, H01b = _generate_qshift_filters(qshift_length)
 
     levels = len(hi)
 
@@ -726,29 +752,37 @@ def _1d_dtcwt_inverse(lo, hi):
     
     return x
         
-def dtcwt_forward(x, levels):
+def dtcwt_forward(x, levels, qshift_length=14):
     '''Take the Dual-Tree Complex Wavelet transform of the input
     array, `x`.
+
+    `qshift_length` is the length of the qshift filters used for
+    levels 2 and above, and for perfect reconstruction should be
+    the same as that used during the forward transform.
 
     `levels` is how many levels should be computed.
     '''
     
     if x.ndim == 1:
-        return _1d_dtcwt_forward(x, levels)
+        return _1d_dtcwt_forward(x, levels, qshift_length=qshift_length)
 
     else:
         raise ValueError('Invalid input shape The input must be '
                 'one-dimensional')
 
-def dtcwt_inverse(lo, hi):
+def dtcwt_inverse(lo, hi, qshift_length=14):
     '''Take the inverse Dual-Tree Complex Wavelet transform of the 
     input arrays, `lo` and `hi`.
+
+    `qshift_length` is the length of the qshift filters used for
+    levels 2 and above, and for perfect reconstruction should be
+    the same as that used during the forward transform.
 
     `levels` is how many levels should be computed.
     '''
     
     if lo.ndim == 1:
-        return _1d_dtcwt_inverse(lo, hi)
+        return _1d_dtcwt_inverse(lo, hi, qshift_length=qshift_length)
 
     else:
         raise ValueError('Invalid input shape: The input must be '

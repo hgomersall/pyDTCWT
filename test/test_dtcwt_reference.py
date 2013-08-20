@@ -97,10 +97,10 @@ class Test1DDTCWTBase(object):
             test_data = numpy.load(each_file)
 
             assert(test_data['biort'] == 'antonini')
-            assert(test_data['qshift'] == 'qshift_14')
 
             input_array = test_data['X']
             levels = test_data['levels']
+            qshift_length = int(test_data['qshift_length'])
 
             ref_lo = test_data['lo']
             ref_hi = test_data['hi']
@@ -112,7 +112,8 @@ class Test1DDTCWTBase(object):
                     len(input_array) % 2**levels != 0):
                 continue
 
-            lo, hi, scale = self.dtcwt_forward_function(input_array, levels)
+            lo, hi, scale = self.dtcwt_forward_function(input_array, levels, 
+                    qshift_length=qshift_length)
 
             self.assertTrue(numpy.allclose(lo, ref_lo))
 
