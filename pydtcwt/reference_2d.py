@@ -106,7 +106,7 @@ def extend_and_filter_along_cols(a, kernel, extension_array=None,
 
 def _extend_and_filter_along_rows_and_cols(lolo, 
         row_filters, col_filters, expand=False):
-    '''A nested function to do filtering along both rows and columns 
+    '''A function to do filtering along both rows and columns 
     of a given set of four low pass inputs. This function either decimates
     the filtered result by two, or twice expands the result by inserting
     zeros prior to filtering. The decimation is used in the forward
@@ -255,10 +255,49 @@ def _2d_dtcwt_forward(x, levels):
 
         return output
 
+    def _add_additional_samples(lolo, axis=0):
+        ''' Adds an additional row or column to the lolo datasets and
+        swaps the respective trees along the given axis. This would be done
+        in order to maintain even length arrays.
+
+        The technique that is equivalent to that done in NGK's dtcwt_toolbox 
+        and generates compatible outputs.
+        '''
+        first_samp_slicer = [slice(None)] * 2
+        last_samp_slicer = [slice(None)] * 2
+
+        last_samp_slicer[axis] = slice(-1, None)
+        first_samp_slicer[axis] = slice(None, 1)
+
+        new_lolo = {}
+
+        opp_axes = [('g', 'h'), ('h', 'g')]
+
+        _lolo_hh = numpy.concatenate(
+                    (lolo[opp_axes[axis]], lolo[('h','h')][last_samp_slicer]), 
+                    axis=axis)
+
+        new_lolo[opp_axes[axis]] = numpy.concatenate(
+                (lolo[opp_axes[axis]][first_samp_slicer], lolo[('h','h')]), 
+                axis=axis)
+
+        new_lolo[('h', 'h')] = _lolo_hh
+
+        # And the g columns
+        _lolo_gg = numpy.concatenate(
+                (lolo[('g','g')][first_samp_slicer], lolo[opp_axes[1-axis]]),
+                axis=axis)
+
+        new_lolo[opp_axes[1-axis]] = numpy.concatenate(
+                (lolo[('g','g')], lolo[opp_axes[1-axis]][last_samp_slicer]),
+                axis=axis)
+
+        new_lolo[('g', 'g')] = _lolo_gg
+
+        return new_lolo
+
     hi = []
     scale = []
-
-    x = numpy.atleast_2d(x)
 
     # We allow odd length rows and columns by adding a column or
     # a row to the right or the bottom respectively. This is as
@@ -331,46 +370,15 @@ def _2d_dtcwt_forward(x, levels):
     for level in range(1, levels):
 
         # We need to deal with the case in which the lolo arrays
-        # are not even length. The following technique is equivalent
-        # to that done in NGK's dtcwt_toolbox and generates compatible
-        # outputs.
+        # are not even length.
+        #
         # All the input should be the same size, so just consider one.
         lolo_shape = lolo[('h', 'h')].shape
         if lolo_shape[1] % 2 == 1:
-            # The row length is not even
-            # Extend (and swap) the h columns
-            _lolo_hh = numpy.concatenate(
-                    (lolo[('h','g')], lolo[('h','h')][:, -1:]), axis=1)
-
-            lolo[('h','g')] = numpy.concatenate(
-                    (lolo[('h','g')][:, :1], lolo[('h','h')]), axis=1)
-            lolo[('h', 'h')] = _lolo_hh
-
-            # And the g columns
-            _lolo_gh = numpy.concatenate(
-                    (lolo[('g','g')], lolo[('g','h')][:, -1:]), axis=1)
-
-            lolo[('g','g')] = numpy.concatenate(
-                    (lolo[('g','g')][:, :1], lolo[('g','h')]), axis=1)
-            lolo[('g', 'h')] = _lolo_gh
+            lolo = _add_additional_samples(lolo, axis=1)
 
         if lolo_shape[0] % 2 == 1:
-            # the column length is not even
-            # Extend (and swap) the h rows
-            _lolo_hh = numpy.concatenate(
-                    (lolo[('g','h')], lolo[('h','h')][-1:, :]), axis=0)
-
-            lolo[('g','h')] = numpy.concatenate(
-                    (lolo[('g','h')][:1, :], lolo[('h','h')]), axis=0)
-            lolo[('h', 'h')] = _lolo_hh
-
-            # And the g rows
-            _lolo_hg = numpy.concatenate(
-                    (lolo[('g','g')], lolo[('h','g')][-1:, :]), axis=0)
-
-            lolo[('g','g')] = numpy.concatenate(
-                    (lolo[('g','g')][:1, :], lolo[('h','g')]), axis=0)
-            lolo[('h', 'g')] = _lolo_hg
+            lolo = _add_additional_samples(lolo, axis=0)
 
 
         hihi = _extend_and_filter_along_rows_and_cols(
@@ -418,7 +426,7 @@ def _2d_dtcwt_inverse(lo, hi):
 
     def _extract_from_complex_inputs(hi):
         '''Performs the reverse operation of
-        :func:_create_high_pass_complex_outputs nested in _2d_dtcwt_forward.
+        :func:`_create_high_pass_complex_outputs` nested in _2d_dtcwt_forward.
 
         Given an input `hi`, it extracts the sub arrays that were used to
         construct it. See that function and the code of this function for
@@ -472,6 +480,42 @@ def _2d_dtcwt_inverse(lo, hi):
 
         return hilo, lohi, hihi
 
+    def _remove_additional_samples(lolo, axis=0):
+        '''Undoes the process of adding an additional row or column
+        to the lolo datasets during the forward transform. This would
+        have been done in order to maintain even length rows or columns.
+
+        do_rows and do_columns should be booleans dictating whether
+        or not the rows or the columns respectively should have a sample 
+        removed.
+
+        See the _2d_dtcwt_forward for more information on exactly
+        what this is undoing.
+        '''
+        first_samp_remover = [slice(None)] * 2
+        last_samp_remover = [slice(None)] * 2
+
+        last_samp_remover[axis] = slice(None, -1)
+        first_samp_remover[axis] = slice(1, None)
+
+        new_lolo = {}
+
+        opp_axes = [('g', 'h'), ('h', 'g')]
+
+        _lolo_hh = lolo[opp_axes[axis]][first_samp_remover]
+
+        new_lolo[opp_axes[axis]] = lolo[('h','h')][last_samp_remover]
+        new_lolo[('h', 'h')] = _lolo_hh
+
+        # And the g columns
+        _lolo_gg = lolo[opp_axes[1-axis]][last_samp_remover]
+
+        new_lolo[opp_axes[1-axis]] = lolo[('g','g')][first_samp_remover]
+        new_lolo[('g', 'g')] = _lolo_gg
+
+        return new_lolo
+
+       
     levels = len(hi)
 
     # The following pair of little dictionaries is simply to look up
@@ -481,7 +525,6 @@ def _2d_dtcwt_inverse(lo, hi):
     lo_start = {'h': 1, 'g': 0}
 
     lolo = {}
-
     # Start by extracting lolo
     for row in ('h', 'g'):
         for col in ('h', 'g'):
@@ -490,6 +533,17 @@ def _2d_dtcwt_inverse(lo, hi):
     for level in range(levels-1, 0, -1):
 
         hilo, lohi, hihi = _extract_from_complex_inputs(hi[level])
+
+        # Check that an additional row and/or column was not added
+        # during the forward transform. If it was, do something about
+        # it.
+        if lolo[('h', 'h')].shape[1] != hihi[('h', 'h')].shape[1]:
+            # We need to remove a column
+            lolo = _remove_additional_samples(lolo, axis=1)
+
+        if lolo[('h', 'h')].shape[0] != hihi[('h', 'h')].shape[0]:
+            # We need to remove a row
+            lolo = _remove_additional_samples(lolo, axis=0)
 
         # We now want to compute the next level lolo from 
         # the extracted complex hi inputs and the previous lolo.
@@ -516,6 +570,7 @@ def _2d_dtcwt_inverse(lo, hi):
                 lolo, {'h': H00a, 'g': H00b}, {'h': H00a, 'g': H00b},
                 expand=True)
 
+
         lolo = {}
 
         for each in lolo_part1:
@@ -525,9 +580,17 @@ def _2d_dtcwt_inverse(lo, hi):
             lolo[each] = (lolo_part1[each] + lolo_part2[each]
                     + lolo_part3[each] + lolo_part4[each])
 
-
-    # Now work on the top level
+    # Now work on the bottom level
     hilo, lohi, hihi = _extract_from_complex_inputs(hi[0])
+
+    # As in the loop, we need to remove added samples
+    if lolo[('h', 'h')].shape[1] != hihi[('h', 'h')].shape[1]:
+        # We need to remove a column
+        lolo = _remove_additional_samples(lolo, axis=1)
+
+    if lolo[('h', 'h')].shape[0] != hihi[('h', 'h')].shape[0]:
+        # We need to remove a row
+        lolo = _remove_additional_samples(lolo, axis=0)
 
     lolo_shape = lolo['h', 'h'].shape
     lolo_dtype = lolo['h', 'h'].dtype
@@ -561,15 +624,35 @@ def _2d_dtcwt_inverse(lo, hi):
     return out
 
 
-def dtcwt_forward(x, levels):
+def dtcwt_forward(x, levels, allow_odd_length_dimensions=False):
     '''Take the 2D Dual-Tree Complex Wavelet transform of the input
     array, `x`.
 
     `levels` is how many levels should be computed.
+
+    If `x` has an odd number of either rows or columns, then
+    a `ValueError` exception is raised. Setting `allow_odd_length_dimensions`
+    to `True` will cause odd length dimensions to be extended by as necessary
+    duplicating the last column or the last row at the right edge or bottom
+    respectively, such that the array has an even number of rows and 
+    columns. In such a case, calling :func:`dtcwt_inverse` on the 
+    generated output will yield an even array with those repeated
+    elements still present. It is up to the user to keep track of such
+    odd arrays, which is why `allow_odd_length_dimensions` needs to
+    be explicitly enabled.
     '''
+    x = numpy.atleast_2d(x)
     
-    if x.ndim == 1 or x.ndim == 2:
-        return _2d_dtcwt_forward(x, levels)
+    if x.ndim == 2:
+        if (not allow_odd_length_dimensions and 
+                (x.shape[0] % 2 != 0 or x.shape[1] % 2 != 0)):
+
+            raise ValueError('Odd length error: Processing of data with '
+                    'odd length dimensions needs to be explicitly enabled '
+                    'with the allow_odd_length_dimensions argument.')
+
+        else:
+            return _2d_dtcwt_forward(x, levels)
 
     else:
         raise ValueError('Invalid input shape The input must be '

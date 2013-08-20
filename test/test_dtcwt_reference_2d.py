@@ -304,6 +304,58 @@ class Test2DDTCWT(TestCasePy3):
     dtcwt_forward_function = staticmethod(
             reference_2d.dtcwt_forward)
 
+    def test_2d_DTCWT_forward_with_disallow_odd_length_dims(self):
+        '''Make sure odd length dimensions raise the right exception.
+        '''
+        datasets = (
+                ((128,), True),
+                ((192, 36), False),
+                ((36, 28), False),
+                ((1, 16), True),
+                ((32, 32), False),
+                ((15, 15), True),
+                ((128, 64), False),
+                ((124, 37), True),
+                ((10, 18), False),
+                ((192, 35), True),
+                ((36, 27), True))
+
+        levels = 4
+        for input_shape, raises in datasets:
+
+            input_array = numpy.random.randn(*input_shape)
+
+            if raises:
+                self.assertRaisesRegex(ValueError, 'Odd length error',
+                        self.dtcwt_forward_function, *(input_array, levels))
+            else:
+                # Should not raise
+                self.dtcwt_forward_function(input_array, levels)
+
+    def test_2d_DTCWT_forward_enable_odd_length_dims(self):
+        '''Explicitly enable the odd length dimensions
+        '''
+        datasets = (
+                (128,),
+                (1, 16),
+                (15, 15),
+                (124, 37),
+                (192, 35),
+                (36, 27))
+
+        levels = 4
+        for input_shape in datasets:
+
+            input_array = numpy.random.randn(*input_shape)
+
+            # Should not raise
+            self.dtcwt_forward_function(input_array, levels,
+                    allow_odd_length_dimensions=True)
+
+            # And the non-keyword case
+            self.dtcwt_forward_function(input_array, levels, True)
+
+
     def test_2d_DTCWT_forward_against_data(self):
         '''Test against data generated using NGK's Matlab toolbox
         '''
@@ -325,7 +377,17 @@ class Test2DDTCWT(TestCasePy3):
 
             test_data.close()
 
-            lo, hi, scale = self.dtcwt_forward_function(input_array, levels)
+            input_shape = input_array.shape
+
+            if (len(input_shape) == 1 or 
+                    input_shape[0] % 2 != 0 or input_shape[1] % 2 != 0):
+
+                lo, hi, scale = self.dtcwt_forward_function(
+                        input_array, levels, True)
+
+            else:
+                lo, hi, scale = self.dtcwt_forward_function(
+                        input_array, levels)
 
             if not numpy.allclose(lo, ref_lo):
                 print input_array.shape, levels, ref_lo.shape, lo.shape
@@ -349,22 +411,38 @@ class Test2DDTCWT(TestCasePy3):
         # (input_shape, levels)
         datasets = (
                 ((128,), 4),
-                ((192, 35), 5),
-                ((36, 27), 4),
+                ((192, 36), 5),
+                ((36, 28), 4),
                 ((1, 16), 4),
                 ((32, 32), 30),
                 ((15, 15), 5),
                 ((128, 64), 5),
                 ((124, 37), 12),
-                ((10, 18), 12))
+                ((10, 18), 12),
+                ((192, 35), 5),
+                ((36, 27), 4))
 
         for input_shape, levels in datasets:
 
             input_array = numpy.random.randn(*input_shape)
 
-            lo, hi, scale = self.dtcwt_forward_function(input_array, levels)
+            if (len(input_shape) == 1 or 
+                    input_shape[0] % 2 != 0 or input_shape[1] % 2 != 0):
+
+                lo, hi, scale = self.dtcwt_forward_function(
+                        input_array, levels, True)
+
+            else:
+                lo, hi, scale = self.dtcwt_forward_function(
+                        input_array, levels)
 
             test_output = reference_2d.dtcwt_inverse(lo, hi)
+
+            if input_shape[0] % 2 != 0:
+                test_output = test_output[:-1, :]
+
+            if len(input_shape) != 1 and input_shape[1] % 2 != 0:
+                test_output = test_output[:, :-1]
 
             self.assertTrue(numpy.allclose(input_array, test_output))
 

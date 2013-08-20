@@ -68,37 +68,40 @@ HL_16 = numpy.array([
     0.0184986827241562, -0.0072026778782583, -0.0002276522058978, 
     0.0024303499451487])
 
-# Firstly we create the qshift filters from HL
-# This uses the same notation as [Kingsbury_99] (albeit allowing for
-# the lack of suffixes) and is taken from that paper, section 6.
-#
-# Low pass tree-b filter first. This is simply HL.
-H00b = HL_14.copy()
 
-# Low pass tree-a filter. This is simply the same as H00b but with
-# all the samples reverse. This is equivalent to mirroring the signal
-# about the t=0 sample (the (n/2)th sample), which gives a -q advance,
-# and then delaying by a sample, resulting in a +3q delay.
-# Note the t=0 sample remains the (n/2)th sample from the left.
-# The is equivalent to z^{-1}HL(z^{-1}) (as described in [Kinsbury_99])
-H00a = H00b[::-1].copy()
+def _generate_qshift_filters(HL):
+    # Here we create the qshift filters from HL
+    # This uses the same notation as [Kingsbury_99] (albeit allowing for
+    # the lack of suffixes) and is taken from that paper, section 6.
+    #
+    # Low pass tree-b filter first. This is simply HL.
+    H00b = HL.copy()
 
-# The high pass filter for tree a is simply the odd samples (defined
-# with respect to the t=0 sample) of HL negated
-# This is equivalent to HL(-z)
-_odd_start = (len(HL_14)//2 + 1) % 2 # The first odd sample in the array
-_temp = HL_14.copy()
-_temp[_odd_start::2] = -_temp[_odd_start::2]
-H01a = _temp
+    # Low pass tree-a filter. This is simply the same as H00b but with
+    # all the samples reverse. This is equivalent to mirroring the signal
+    # about the t=0 sample (the (n/2)th sample), which gives a -q advance,
+    # and then delaying by a sample, resulting in a +3q delay.
+    # Note the t=0 sample remains the (n/2)th sample from the left.
+    # The is equivalent to z^{-1}HL(z^{-1}) (as described in [Kinsbury_99])
+    H00a = H00b[::-1].copy()
 
-# The high pass filter for tree b is then the time reversed and 
-# and sample shifted high pass filter for tree a (H01a). This is
-# similar to getting H00a from H00b as above.
-# This is equivalent to z^{-1}HL(-z^{-1})
-H01b = H01a[::-1].copy()
+    # The high pass filter for tree a is simply the odd samples (defined
+    # with respect to the t=0 sample) of HL negated
+    # This is equivalent to HL(-z)
+    _odd_start = (len(HL)//2 + 1) % 2 # The first odd sample in the array
+    _temp = HL.copy()
+    _temp[_odd_start::2] = -_temp[_odd_start::2]
+    H01a = _temp
 
-# Clean up the namespace
-del _temp, _odd_start
+    # The high pass filter for tree b is then the time reversed and 
+    # and sample shifted high pass filter for tree a (H01a). This is
+    # similar to getting H00a from H00b as above.
+    # This is equivalent to z^{-1}HL(-z^{-1})
+    H01b = H01a[::-1].copy()
+
+    return H00a, H01a, H00b, H01b
+
+H00a, H01a, H00b, H01b = _generate_qshift_filters(HL_14)
 
 def extend_1d(a, pre_extension_length, extension_array=None, 
         post_extension_length=None):
@@ -633,6 +636,18 @@ def _1d_dtcwt_inverse(lo, hi):
     '''Implements the inverse 1D Dual-tree Complex Wavelet Transform.
     '''
 
+    def _remove_additional_samples(tree_a_lo, tree_b_lo):
+        '''A short nested function to remove samples that were
+        added during the forward transform to make the array length
+        even. See _1d_dtcwt_forward for details on exactly what this
+        function undoes.
+        '''
+        _tree_a_lo = tree_b_lo[:-1]
+        tree_b_lo = tree_a_lo[1:]
+        tree_a_lo = _tree_a_lo
+
+        return tree_a_lo, tree_b_lo
+
     levels = len(hi)
 
     # Extract each tree lo pass input from lo
@@ -654,11 +669,9 @@ def _1d_dtcwt_inverse(lo, hi):
         if len(tree_a_hi) != len(tree_a_lo):
             # In this case, an additional sample was added during
             # the forward DTCWT to maintain an even length array. 
-            # What follows is the opposite process to undo that
-            # operation. See the _1d_dtcwt_forward for more info.
-            _tree_a_lo = tree_b_lo[:-1]
-            tree_b_lo = tree_a_lo[1:]
-            tree_a_lo = _tree_a_lo
+            # Note, this is never true on the top level.
+            tree_a_lo, tree_b_lo = _remove_additional_samples(
+                    tree_a_lo, tree_b_lo)
 
         # The inverse filters are just the forward filters from
         # the opposite tree, and extensions are the opposite tree,
@@ -693,9 +706,8 @@ def _1d_dtcwt_inverse(lo, hi):
     if len(tree_a_hi) != len(tree_a_lo):
         # As in the loop above, deal with the case in which the arrays
         # were extended by a sample during the forward operation.
-        _tree_a_lo = tree_b_lo[:-1]
-        tree_b_lo = tree_a_lo[1:]
-        tree_a_lo = _tree_a_lo
+        tree_a_lo, tree_b_lo = _remove_additional_samples(
+                tree_a_lo, tree_b_lo)
 
     _lo = numpy.empty(len(tree_a_lo) * 2, dtype=tree_a_lo.dtype)
     _hi = numpy.empty(len(tree_a_hi) * 2, dtype=tree_a_hi.dtype)
