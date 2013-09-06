@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
-''' Import everything we want into the pyfftw namespace
+''' Import everything we want into the pydtcwt namespace
 '''
 
-from edge_extend import (
-        symmetrically_extend,)
+import reference_2d
+import reference

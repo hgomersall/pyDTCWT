@@ -1,22 +1,15 @@
-import numpy
-import math
-
-'''This module is a reference implementation of the Dual-Tree
-Complex Wavelet Transform (DTCWT) [Kingsbury_99]_ [SP_tutorial]_ 
-using Q-shift filters.
+'''This module is a reference implementation of the one-dimensional
+Dual-Tree Complex Wavelet Transform (DTCWT) using Q-shift filters.
 
 The code is optimised for code readability and algorithmic 
 understanding, rather than speed.
 
-.. [ngk_dtcwt] N G Kingsbury "Image Processing with Complex Wavelets", 
-   *Phil. Trans. Royal Society London A*, September 1999, 
-   on a Discussion Meeting on "Wavelets: the key to intermittent 
-   information?", London, February 24-25, 1999.
-
-.. [SP_tutorial] I W Selesnick, R G Baraniuk, and N G Kingsbury, 
-   "The Dual-Tree Complex Wavelet Transform," *IEEE Signal Processing 
-   Magazine*, vol 22, no 6, pp 123-151, Nov. 2005.
+The implementation is designed to be largely data compatible with Nick
+Kingsbury's `DTCWT toolbox <http://www-sigproc.eng.cam.ac.uk/~ngk/#talks>`_.
 '''
+
+import numpy
+import math
 
 # Firstly we define the wavelet bases. The ones defined here
 # are not the only options, though should perform reasonably.
@@ -113,33 +106,42 @@ def _generate_qshift_filters(qshift_length):
 def extend_1d(a, pre_extension_length, extension_array=None, 
         post_extension_length=None):
     '''Extend the 1D array at both the beginning and the end
-    using data from `extension_array`.
+    using data from ``extension_array``.
 
-    The extension at beginning is of length `pre_extension_length` samples 
-    and at the end of length `post_extension_length`. If 
-    `post_extension_length` is ommitted, then the same value is used as
-    given in `pre_extension_length`
+    The extension at beginning is of length ``pre_extension_length`` samples 
+    and at the end of length ``post_extension_length``. If 
+    ``post_extension_length`` is ommitted, then the same value is used as
+    given in `pre_extension_length`.
 
-    If `extension_array` is `None`, then reversed `a` (that is, `a[::-1]`)
-    is used instead.
+    If ``extension_array`` is ``None``, then reversed ``a`` (that is, 
+    ``a[::-1]``) is used instead.
 
     If either extension length is larger than the length of 
-    `extension_array`, then `extension_array` is pre- or 
-    post-concatenated with `a` (as necessary) and the resultant array 
+    ``extension_array``, then ``extension_array`` is pre- or 
+    post-concatenated with ``a`` (as necessary) and the resultant array 
     is then repeated enough times to create a large enough array to 
-    extract `extension_length` samples.
+    extract ``extension_length`` samples.
     
     For example:
-    >>> a = numpy.array([1, 2, 3, 4])
-    >>> extend_1d(a, 3)
-    array([3, 2, 1, 1, 2, 3, 4, 4, 3, 2])
-    >>> extend_1d(a, 6)
-    array([3, 4, 4, 3, 2, 1, 1, 2, 3, 4, 4, 3, 2, 1, 1, 2])
-    >>> b = numpy.array([7, 6, 5])
-    >>> extend_1d(a, 6, b)
-    array([2, 3, 4, 7, 6, 5, 1, 2, 3, 4, 7, 6, 5, 1, 2, 3])
-    >>> extend_1d(a, 6, b, 3)
-    array([2, 3, 4, 7, 6, 5, 1, 2, 3, 4, 7, 6, 5])
+    
+    .. testsetup::
+
+       import numpy
+       from pydtcwt.reference import extend_1d
+
+    .. doctest::
+
+        >>> a = numpy.array([1, 2, 3, 4])
+        >>> extend_1d(a, 3)
+        array([3, 2, 1, 1, 2, 3, 4, 4, 3, 2])
+        >>> extend_1d(a, 6)
+        array([3, 4, 4, 3, 2, 1, 1, 2, 3, 4, 4, 3, 2, 1, 1, 2])
+        >>> b = numpy.array([7, 6, 5])
+        >>> extend_1d(a, 6, b)
+        array([2, 3, 4, 7, 6, 5, 1, 2, 3, 4, 7, 6, 5, 1, 2, 3])
+        >>> extend_1d(a, 6, b, 3)
+        array([2, 3, 4, 7, 6, 5, 1, 2, 3, 4, 7, 6, 5])
+
     '''
     a = numpy.asanyarray(a)
 
@@ -222,18 +224,23 @@ def extend_1d(a, pre_extension_length, extension_array=None,
     return output_array
 
 def extend_and_filter(a, kernel, extension_array=None, 
-        pre_extension_length=None, post_extension_length=None):
-    '''1D filter the array `a` with `kernel`.
+        pre_extension_length=None, post_extension_length=None,
+        decimate_by_two=False):
+    '''1D filter the array ``a`` with ``kernel``.
 
     The signal is extended at the ends using the data in extension array
-    using :func:`extend_1d`. If `extension_array` is None, `a[::-1]` is
-    used for the extension (i.e. reversed `a`).
+    using :func:`extend_1d`. If ``extension_array`` is None, ``a[::-1]`` is
+    used for the extension (i.e. reversed ``a``).
 
-    `pre_extension_length` and `post_extension_length` define 
+    ``pre_extension_length`` and ``post_extension_length`` define 
     how long an extension should be used. By default 
     pre_extension_length is (floor(filter_length/2) - 1) and 
     post_extension_length is (filter_length - pre_extension_length - 1).
-    With such extensions, the resultant array is the same length as `a`.
+    With such extensions, the resultant array is the same length as ``a``.
+
+    If ``decimate_by_two`` is ``True``, the final filtered output is
+    decimated by two before being returned. The consequence of this
+    is the output array is half the length of the input array.
     '''
     if pre_extension_length is None:
         pre_extension_length = (len(kernel) - 1)//2
@@ -245,41 +252,48 @@ def extend_and_filter(a, kernel, extension_array=None,
             post_extension_length)
 
     filtered_a = numpy.convolve(extended_a, kernel, mode='valid')
-    return filtered_a
+
+    if decimate_by_two:
+        return filtered_a[::2]
+    else:
+        return filtered_a
 
 def extend_expand_and_filter(a, kernel, extension_array=None,
         pre_extension_length=None, post_extension_length=None,
         first_sample_zero=True):
     '''Used by the inverse DTCWT. This function filters the
-    array `a` with `kernel` after symmetric extension and
+    array ``a`` with ``kernel`` after symmetric extension and
     two times upsampling (by interlacing the samples with
     zeros).
 
     The signal is extended at the ends using the data in extension array
-    using :func:`extend_1d`. If `extension_array` is None, `a[::-1]` is
-    is used for the extension (i.e. reversed `a`).
+    using :func:`extend_1d`. If ``extension_array`` is ``None``, 
+    ``a[::-1]`` is used for the extension (i.e. reversed ``a``).
 
     After extending the input, the signal is interlaced with zeros.
-    `first_sample_zero` dictates whether the first sample of the 
-    expanded version of `a` is 0, or whether it is the first element
-    of `a`. See below for an example of this usage.
+    ``first_sample_zero`` dictates whether the first sample of the 
+    expanded version of ``a`` is 0, or whether it is the first element
+    of ``a``. See below for an example of this usage.
 
-    `pre_extension_length` and `post_extension_length` define 
+    ``pre_extension_length`` and ``post_extension_length`` define 
     how long an extension should be *after* two times upsampling. 
     By default, pre_extension_length is (floor(filter_length/2) - 1) and 
     post_extension_length is (filter_length - pre_extension_length - 1).
-    With such extensions, the resultant array is twice the length of `a`.
+    With such extensions, the resultant array is twice the length of ``a``.
 
-    For example, for input `[a1, a2, a3, a4, a5]` and extension
-    `[b1, b2, b3]`, the expansion with `pre_extension_length` as 5 and 
-    `first_sample_zero` as `True` would yield the following expanded
-    and extended array:
-    [b1, 0, b2, 0, b3, 0, a1, 0, a2, 0, a3, 0, a4, ...]
-    and with `first_sample_zero as `False` would yield the following:
-    [0, b2, 0, b3, 0, a1, 0, a2, 0, a3, 0, a4, 0, ...]
+    For example, for input ``[a1, a2, a3, a4, a5]`` and extension
+    ``[b1, b2, b3]``, the expansion with ``pre_extension_length`` 
+    as 5 and ``first_sample_zero`` as ``True`` would yield the 
+    following expanded and extended array:
+    
+    ``[b1, 0, b2, 0, b3, 0, a1, 0, a2, 0, a3, 0, a4, ...]``
+
+    and with ``first_sample_zero`` as ``False`` would yield the following:
+
+    ``[0, b2, 0, b3, 0, a1, 0, a2, 0, a3, 0, a4, 0, ...]``
 
     In both cases there are 5 extension samples, followed by either
-    0 or a1 depending on the `first_sample_zero` flag.
+    0 or a1 depending on the ``first_sample_zero`` flag.
     '''
     if pre_extension_length is None:
         pre_extension_length = (len(kernel) - 1)//2
@@ -400,16 +414,20 @@ def _1d_dtcwt_forward(x, levels, qshift_length=14):
         tree_a_extension = tree_b_lo[::-1]
         tree_b_extension = tree_a_lo[::-1]
 
-        # The final [::2] indexing is the decimation by 2.
+        # We need to decimate by two, so pass that argument
         tree_a_hi = extend_and_filter(tree_a_lo, H01a, tree_a_extension, 
-                pre_extension_length, post_extension_length)[::2]
+                pre_extension_length, post_extension_length, 
+                decimate_by_two=True)
         tree_b_hi = extend_and_filter(tree_b_lo, H01b, tree_b_extension, 
-                pre_extension_length, post_extension_length)[::2]
+                pre_extension_length, post_extension_length, 
+                decimate_by_two=True)
 
         tree_a_lo = extend_and_filter(tree_a_lo, H00a, tree_a_extension, 
-                pre_extension_length, post_extension_length)[::2]
+                pre_extension_length, post_extension_length, 
+                decimate_by_two=True)
         tree_b_lo = extend_and_filter(tree_b_lo, H00b, tree_b_extension, 
-                pre_extension_length, post_extension_length)[::2]
+                pre_extension_length, post_extension_length, 
+                decimate_by_two=True)
  
         # Create the interleaved scale array
         _scale = numpy.empty(len(tree_a_lo) + len(tree_b_lo),
@@ -652,9 +670,9 @@ def _1d_dtcwt_forward_single_extension(x, levels, qshift_length=14):
 
 def _1d_dtcwt_inverse(lo, hi, qshift_length=14):
     '''Implements the inverse 1D Dual-tree Complex Wavelet Transform
-    from `lo` and `hi` inputs.
+    from ``lo`` and ``hi`` inputs.
 
-    `qshift_length` is the length of the qshift filters used for
+    ``qshift_length`` is the length of the qshift filters used for
     levels 2 and above, and for perfect reconstruction should be
     the same as that used during the forward transform.
     '''
@@ -662,8 +680,8 @@ def _1d_dtcwt_inverse(lo, hi, qshift_length=14):
     def _remove_additional_samples(tree_a_lo, tree_b_lo):
         '''A short nested function to remove samples that were
         added during the forward transform to make the array length
-        even. See _1d_dtcwt_forward for details on exactly what this
-        function undoes.
+        even. See :func:`_1d_dtcwt_forward` for details on exactly 
+        what this function undoes.
         '''
         _tree_a_lo = tree_b_lo[:-1]
         tree_b_lo = tree_a_lo[1:]
@@ -753,14 +771,26 @@ def _1d_dtcwt_inverse(lo, hi, qshift_length=14):
     return x
         
 def dtcwt_forward(x, levels, qshift_length=14):
-    '''Take the Dual-Tree Complex Wavelet transform of the input
-    array, `x`.
+    '''Take the Dual-Tree Complex Wavelet transform of the one-dimensional
+    input array, ``x``.
 
-    `qshift_length` is the length of the qshift filters used for
-    levels 2 and above, and for perfect reconstruction should be
-    the same as that used during the forward transform.
+    ``levels`` is how many levels should be computed.    
 
-    `levels` is how many levels should be computed.
+    ``qshift_length`` is the length of the qshift filters used for
+    levels 2 and above.
+
+    The function returns a tuple of three outputs, ``(lo, hi, scale)``.
+
+    ``lo`` is the low pass output and is a one-dimensional array.
+
+    ``hi`` is a tuple of length ``levels``, containing the complex
+    high-pass outputs at each level. The first entry in the tuple
+    is the bottom level output and the last entry the top level output.
+    Each high-pass output is a single complex one-dimensional array.
+
+    ``scale`` is the collected low-pass outputs for every level. It 
+    can be safely discarded (it is not needed for the inverse), 
+    but is computed for free.
     '''
     
     if x.ndim == 1:
@@ -772,13 +802,12 @@ def dtcwt_forward(x, levels, qshift_length=14):
 
 def dtcwt_inverse(lo, hi, qshift_length=14):
     '''Take the inverse Dual-Tree Complex Wavelet transform of the 
-    input arrays, `lo` and `hi`.
+    input arrays, ``lo`` and ``hi``, which should be of the same
+    form as that generated by :func:`dtcwt_forward`
 
-    `qshift_length` is the length of the qshift filters used for
+    ``qshift_length`` is the length of the qshift filters used for
     levels 2 and above, and for perfect reconstruction should be
     the same as that used during the forward transform.
-
-    `levels` is how many levels should be computed.
     '''
     
     if lo.ndim == 1:

@@ -280,6 +280,57 @@ class TestDTCWTReferenceMisc(TestCasePy3):
 
             self.assertTrue(numpy.allclose(ref_output, test_output))
 
+    def test_extend_and_filter_and_decimate(self):
+        # a tuple of test specs:
+        # (input_shape, kernel_length, extension_array, 
+        #  pre_length, post_length)
+        datasets = (
+                ((128,), 16, None, None, None),
+                ((128,), 15, None, None, None),            
+                ((128,), 11, [1, 2, 3], None, None),
+                ((128,), 16, [3, 2, 1], None, None),
+                ((36,), 16, [3, 2, 1], 4, 10),
+                ((36,), 16, [3, 2, 1], 5, 10),
+                ((36,), 16, [3, 2, 1], 11, 5),                
+                ((12,), 17, None, None, None))
+        
+        delta = numpy.array([1])
+
+        for (input_shape, kernel_length, ext_array, 
+                pre_length, post_length) in datasets:
+            a = numpy.random.randn(*input_shape)
+
+            if pre_length is None:
+                pre_length = (kernel_length-1)//2
+
+            if post_length is None:
+                post_length = kernel_length - pre_length - 1
+
+            _a = reference.extend_1d(a, pre_length, 
+                    ext_array, post_length)
+
+            kernel = numpy.random.randn(kernel_length)
+            
+            ref_output = numpy.convolve(_a, kernel, mode='valid')
+
+            delta_kernel = numpy.concatenate(
+                    (numpy.zeros(post_length), delta, 
+                        numpy.zeros(pre_length)))
+
+            delta_args = (a, delta_kernel, ext_array, pre_length, 
+                    post_length, True)
+            kernel_args = (a, kernel, ext_array, pre_length, 
+                    post_length, True)
+
+            delta_output = reference.extend_and_filter(*delta_args)
+
+            self.assertTrue(numpy.allclose(a[::2], delta_output))
+
+            test_output = reference.extend_and_filter(*kernel_args)
+
+            self.assertTrue(numpy.allclose(ref_output[::2], test_output))
+
+
     def test_extend_expand_and_filter(self):
         # a tuple of test specs:
         # (input_shape, kernel_length, extension_array, 

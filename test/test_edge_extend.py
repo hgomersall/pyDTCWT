@@ -1,4 +1,5 @@
 import pydtcwt
+from pydtcwt.edge_extend import symmetrically_extend
 import numpy
 import unittest
 import numpy
@@ -66,10 +67,10 @@ class TestSymmetricExtension(unittest.TestCase):
         for input_arr, ext_length, axis, output_arr in test_arrays:
 
             if axis is not None:
-                output_array = pydtcwt.symmetrically_extend(
+                output_array = symmetrically_extend(
                         array(input_arr), ext_length, axis)
             else:
-                output_array = pydtcwt.symmetrically_extend(
+                output_array = symmetrically_extend(
                         array(input_arr), ext_length)
 
             self.assertTrue(numpy.alltrue(output_array == output_arr))

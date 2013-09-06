@@ -1,9 +1,3 @@
-import numpy
-import math
-
-from .reference import (biort_lo, biort_hi, inv_biort_lo, inv_biort_hi,
-        _generate_qshift_filters, extend_and_filter, extend_expand_and_filter)
-
 '''This module extends :mod:`pydtcwt.reference` to two dimensional 
 arrays.
 
@@ -11,36 +5,42 @@ As with that module, the focus and emphasis is on understanding rather
 than speed.
 '''
 
+import numpy
+import math
+
+from .reference import (biort_lo, biort_hi, inv_biort_lo, inv_biort_hi,
+        _generate_qshift_filters, extend_and_filter, extend_expand_and_filter)
+
 def extend_and_filter_along_rows(a, kernel, extension_array=None, 
         pre_extension_length=None, post_extension_length=None, 
         expand_after_extending=False, expanded_first_sample_zero=True):
-    '''1D filter each row of the array `a` with `kernel` and return a 
-    2D array with the same number of columns. If `a` is 1D, the output 
+    '''1D filter each row of the array ``a`` with ``kernel`` and return a 
+    2D array with the same number of columns. If ``a`` is 1D, the output 
     will still be a 2D, but it will have a single column.
 
     Each row of the input signal is extended at the ends using the data in 
-    `extension_array` using :func:`pydtcwt.reference.extend_1d`. 
-    If `extension_array` is None, `a[:, ::-1]` is used for the extension 
-    (i.e. row reversed `a`).
+    ``extension_array`` using :func:`pydtcwt.reference.extend_1d`. 
+    If ``extension_array`` is None, ``a[:, ::-1]`` is used for the extension 
+    (i.e. row reversed ``a``).
 
-    Optionally, according to `expand_after_extending`, the array 
+    Optionally, according to ``expand_after_extending``, the array 
     is two times upsampled along the rows after the extension, 
-    interlacing the data with zeros. `expanded_first_sample_zero`
+    interlacing the data with zeros. ``expanded_first_sample_zero``
     dictates whether the first sample of the expanded version of 
-    `a` is 0, or whether it is the first element of `a`. See
-    :func:`reference.extend_expand_and_filter` for the one-dimensional
+    ``a`` is 0, or whether it is the first element of ``a``. See
+    :func:`pydtcwt.reference.extend_expand_and_filter` for the one-dimensional
     explanation of this (which this function simply repeats over each
-    row). Note that `expanded_first_sample_zero` only has any influence
-    when `expand_after_extending` is True.
+    row). Note that ``expanded_first_sample_zero`` only has any influence
+    when ``expand_after_extending`` is True.
 
-    `extension_array` must have the same number of columns as `a`.
+    ``extension_array`` must have the same number of columns as ``a``.
 
-    `pre_extension_length` and `post_extension_length` define 
+    ``pre_extension_length`` and ``post_extension_length`` define 
     how long an extension row should be used. By default 
     pre_extension_length is (floor(filter_length/2) - 1) and 
     post_extension_length is (filter_length - pre_extension_length - 1).
     With such extensions, the length of each output row is the same length 
-    as the corresponding row of `a`.
+    as the corresponding row of ``a``.
     '''
     if a.ndim > 2:
         raise ValueError('Too many input dimensions: The input array must ',
@@ -111,21 +111,21 @@ def _extend_and_filter_along_rows_and_cols(lolo,
     zeros prior to filtering. The decimation is used in the forward
     DTCWT and the expansion in the inverse.
 
-    `lolo` is a dictionary to datasets, with keys given by
-    all the 2-tuple permutations of (`h`, `g`) (so 4 entries
+    ``lolo`` is a dictionary to datasets, with keys given by
+    all the 2-tuple permutations of (``h``, ``g``) (so 4 entries
     in all). The first entry corresponds to the column and the
-    second to the rows. `h` or `g` denotes which filter was used
+    second to the rows. ``h`` or ``g`` denotes which filter was used
     to derive the dataset (corresponding to each tree).
 
-    `row_filters` is a dictionary with keys `h` and `g` corresponding
-    to which filter is used on the rows for the `h` and `g`
+    ``row_filters`` is a dictionary with keys ``h`` and ``g`` corresponding
+    to which filter is used on the rows for the ``h`` and ``g``
     trees respectively.
 
-    `col_filters` is equivalent to `row_filters` but for the columns.
+    ``col_filters`` is equivalent to ``row_filters`` but for the columns.
 
-    `expand` is a boolean dictating whether the output is expanded 
-    or decimated. If `expand` equates to `False` (the default) then 
-    the output is decimated, otherwise if it equates to `True` the
+    ``expand`` is a boolean dictating whether the output is expanded 
+    or decimated. If ``expand`` equates to ``False`` (the default) then 
+    the output is decimated, otherwise if it equates to ``True`` the
     output is expanded.
 
     The point of this function is that it is necessary to interleave 
@@ -185,10 +185,10 @@ def _extend_and_filter_along_rows_and_cols(lolo,
 def _2d_dtcwt_forward(x, levels, qshift_length=14):
     '''Implements the forward 2D Dual-tree Complex Wavelet Transform.
 
-    `x` is the input array and `levels` is the number of levels
+    ``x`` is the input array and ``levels`` is the number of levels
     of the DTCWT that should be taken.
 
-    `qshift_length` is the length of the qshift filters used for
+    ``qshift_length`` is the length of the qshift filters used for
     levels 2 and above.
 
     This implementation is not identical to that described in the 
@@ -205,13 +205,13 @@ def _2d_dtcwt_forward(x, levels, qshift_length=14):
         a list of 6 complex arrays corresponding to each complex wavelet 
         orientation.
 
-        The outputs differ from those described in [SP_tutorial] 
+        The outputs differ from those described in [Selesnick05] 
         (equations (43)-(44) and (49)-(50)). The outputs used should
         be readily inferable from the code for this function (which 
         avoids a messy block of ascii mathematics).
 
         This function could be modified to more closely reflect the
-        [SP_tutorial], but instead is designed to generate data 
+        [Selesnick05], but instead is designed to generate data 
         compatible with NGK's original DTCWT toolbox (which pre-dated
         the tutorial).
 
@@ -240,7 +240,7 @@ def _2d_dtcwt_forward(x, levels, qshift_length=14):
         # a, b, c and d are provided by wavelet_arrangement below.
         # Each tuple in the dictionary provides the keys to datasets
         # yielding (a, b, c, d). That is, if the first entry in the tuple
-        # is ('g', 'h'), then `a` will be set as data[('g', 'h')] where
+        # is ('g', 'h'), then ``a`` will be set as data[('g', 'h')] where
         # data is taken from datasets.
         wavelet_arrangement = {
                 ('lo', 'hi'): (('g','h'), ('h','g'), ('g','g'), ('h','h')),
@@ -319,7 +319,7 @@ def _2d_dtcwt_forward(x, levels, qshift_length=14):
     _hi = extend_and_filter_along_rows(x, biort_hi)
     _lo = extend_and_filter_along_rows(x, biort_lo)
 
-    # Now, as in [SP_tutorial] we denote the different filter trees
+    # Now, as in [Selesnick05] we denote the different filter trees
     # by 'h' and 'g', except that as with the 1D transform, to maintain 
     # consistency with NGK's dtcwt toolbox, the trees that correspond 
     # to the real and the imginary parts are swapped.
@@ -423,9 +423,9 @@ def _2d_dtcwt_forward(x, levels, qshift_length=14):
     return lo, hi, scale
 
 def _2d_dtcwt_inverse(lo, hi, qshift_length=14):
-    '''Computes the 2d inverse DTCWT from `lo` and `hi` inputs.
+    '''Computes the 2d inverse DTCWT from ``lo`` and ``hi`` inputs.
 
-    `qshift_length` is the length of the qshift filters used for
+    ``qshift_length`` is the length of the qshift filters used for
     levels 2 and above, and for perfect reconstruction should be
     the same as that used during the forward transform.
 
@@ -436,7 +436,7 @@ def _2d_dtcwt_inverse(lo, hi, qshift_length=14):
         '''Performs the reverse operation of
         :func:`_create_high_pass_complex_outputs` nested in _2d_dtcwt_forward.
 
-        Given an input `hi`, it extracts the sub arrays that were used to
+        Given an input ``hi``, it extracts the sub arrays that were used to
         construct it. See that function and the code of this function for
         more understanding about exactly what is being done.
         '''
@@ -461,7 +461,7 @@ def _2d_dtcwt_inverse(lo, hi, qshift_length=14):
         # Each tuple in the dictionary provides the keys to datasets
         # into which (a, b, c, d) should be inserted. 
         # That is, if the first entry in the tuple
-        # is ('g', 'h'), then data[('g', 'h')] will be set to be `a` where
+        # is ('g', 'h'), then data[('g', 'h')] will be set to be ``a`` where
         # data is a particular output
         wavelet_arrangement = {
                 ('lo', 'hi'): (('g','h'), ('h','g'), ('g','g'), ('h','h')),
@@ -636,24 +636,41 @@ def _2d_dtcwt_inverse(lo, hi, qshift_length=14):
 def dtcwt_forward(x, levels, qshift_length=14, 
         allow_odd_length_dimensions=False):
     '''Take the 2D Dual-Tree Complex Wavelet transform of the input
-    array, `x`.
+    array, ``x``.
 
-    `levels` is how many levels should be computed.
+    ``levels`` is how many levels should be computed.
 
-    `qshift_length` is the length of the qshift filters used for
+    ``qshift_length`` is the length of the qshift filters used for
     levels 2 and above, and for perfect reconstruction should be
     the same as that used during the forward transform.
 
-    If `x` has an odd number of either rows or columns, then
-    a `ValueError` exception is raised. Setting `allow_odd_length_dimensions`
-    to `True` will cause odd length dimensions to be extended by as necessary
-    duplicating the last column or the last row at the right edge or bottom
+    If ``x`` has an odd number of either rows or columns, then
+    a ``ValueError`` exception is raised. Setting ``allow_odd_length_dimensions``
+    to ``True`` will cause odd length dimensions to be extended as necessary
+    by duplicating the last column or the last row at the right edge or bottom
     respectively, such that the array has an even number of rows and 
     columns. In such a case, calling :func:`dtcwt_inverse` on the 
     generated output will yield an even array with those repeated
     elements still present. It is up to the user to keep track of such
-    odd arrays, which is why `allow_odd_length_dimensions` needs to
+    odd arrays, which is why ``allow_odd_length_dimensions`` needs to
     be explicitly enabled.
+
+    The function returns a tuple of three outputs, ``(lo, hi, scale)``.
+
+    ``lo`` is the low pass output and is a two-dimensional array.
+
+    ``hi`` is a tuple of length ``levels``, containing the complex
+    high-pass outputs at each level. The first entry in the tuple
+    is the bottom level output and the last entry the top level output.
+    Each high pass output is a dictionary of two-dimensional complex 
+    arrays. The keys to the dictionary are ``-75``, ``-45``, ``-15``,
+    ``15``, ``45`` and ``75`` and correspond to the angle of orientation
+    of each of the six complex wavelets that generated that particular 
+    output.
+
+    ``scale`` is the collected low-pass outputs for every level. It 
+    can be safely discarded (it is not needed for the inverse), 
+    but is computed for free.
     '''
     x = numpy.atleast_2d(x)
     
@@ -674,13 +691,13 @@ def dtcwt_forward(x, levels, qshift_length=14,
 
 def dtcwt_inverse(lo, hi, qshift_length=14):
     '''Take the inverse 2D Dual-Tree Complex Wavelet transform of the 
-    input arrays, `lo` and `hi`.
+    input arrays, ``lo`` and ``hi``.
 
-    `qshift_length` is the length of the qshift filters used for
+    ``qshift_length`` is the length of the qshift filters used for
     levels 2 and above, and for perfect reconstruction should be
     the same as that used during the forward transform.
 
-    `levels` is how many levels should be computed.
+    ``levels`` is how many levels should be computed.
     '''
     
     if lo.ndim == 1 or lo.ndim == 2:
