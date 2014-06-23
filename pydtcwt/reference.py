@@ -5,7 +5,7 @@ The code is optimised for code readability and algorithmic
 understanding, rather than speed.
 
 The implementation is designed to be largely data compatible with Nick
-Kingsbury's `DTCWT toolbox <http://www-sigproc.eng.cam.ac.uk/~ngk/#talks>`_.
+Kingsbury's `DTCWT toolbox <http://www-sigproc.eng.cam.ac.uk/Main/NGK#JumpTalks>`_.
 '''
 
 import numpy

@@ -569,7 +569,8 @@ def dtcwt_forward(x, levels, qshift_length=14):
     ``qshift_length`` is the length of the qshift filters used for
     levels 2 and above.
 
-    The function returns a tuple of three outputs, ``(lo, hi, scale)``.
+    The function returns a tuple of three outputs, 
+    ``(lo, hi_pos, hi_neg, scale)``.
 
     ``lo`` is the low pass output and is a one-dimensional array.
 
