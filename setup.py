@@ -1,7 +1,7 @@
 # Copyright 2013 Knowledge Economy Developments Ltd
 # 
 
-from distutils.core import setup
+from setuptools import setup
 
 import os
 import sys
