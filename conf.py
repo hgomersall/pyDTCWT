@@ -41,7 +41,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'pyDTCWT'
-copyright = u'2013, Knowledge Economy Developments Ltd'
+copyright = u'2016, Knowledge Economy Developments Ltd'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
