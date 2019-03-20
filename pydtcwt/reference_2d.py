@@ -1,4 +1,4 @@
-'''This module extends :mod:`pydtcwt.reference` to two dimensional 
+'''This module extends :mod:`pydtcwt.reference` to two dimensional
 arrays.
 
 As with that module, the focus and emphasis is on understanding rather
@@ -11,22 +11,22 @@ import math
 from .reference import (biort_lo, biort_hi, inv_biort_lo, inv_biort_hi,
         _generate_qshift_filters, extend_and_filter, extend_expand_and_filter)
 
-def extend_and_filter_along_rows(a, kernel, extension_array=None, 
-        pre_extension_length=None, post_extension_length=None, 
+def extend_and_filter_along_rows(a, kernel, extension_array=None,
+        pre_extension_length=None, post_extension_length=None,
         expand_after_extending=False, expanded_first_sample_zero=True):
-    '''1D filter each row of the array ``a`` with ``kernel`` and return a 
-    2D array with the same number of columns. If ``a`` is 1D, the output 
+    '''1D filter each row of the array ``a`` with ``kernel`` and return a
+    2D array with the same number of columns. If ``a`` is 1D, the output
     will still be a 2D, but it will have a single column.
 
-    Each row of the input signal is extended at the ends using the data in 
-    ``extension_array`` using :func:`pydtcwt.reference.extend_1d`. 
-    If ``extension_array`` is None, ``a[:, ::-1]`` is used for the extension 
+    Each row of the input signal is extended at the ends using the data in
+    ``extension_array`` using :func:`pydtcwt.reference.extend_1d`.
+    If ``extension_array`` is None, ``a[:, ::-1]`` is used for the extension
     (i.e. row reversed ``a``).
 
-    Optionally, according to ``expand_after_extending``, the array 
-    is two times upsampled along the rows after the extension, 
+    Optionally, according to ``expand_after_extending``, the array
+    is two times upsampled along the rows after the extension,
     interlacing the data with zeros. ``expanded_first_sample_zero``
-    dictates whether the first sample of the expanded version of 
+    dictates whether the first sample of the expanded version of
     ``a`` is 0, or whether it is the first element of ``a``. See
     :func:`pydtcwt.reference.extend_expand_and_filter` for the one-dimensional
     explanation of this (which this function simply repeats over each
@@ -35,11 +35,11 @@ def extend_and_filter_along_rows(a, kernel, extension_array=None,
 
     ``extension_array`` must have the same number of columns as ``a``.
 
-    ``pre_extension_length`` and ``post_extension_length`` define 
-    how long an extension row should be used. By default 
-    pre_extension_length is (floor(filter_length/2) - 1) and 
+    ``pre_extension_length`` and ``post_extension_length`` define
+    how long an extension row should be used. By default
+    pre_extension_length is (floor(filter_length/2) - 1) and
     post_extension_length is (filter_length - pre_extension_length - 1).
-    With such extensions, the length of each output row is the same length 
+    With such extensions, the length of each output row is the same length
     as the corresponding row of ``a``.
     '''
     if a.ndim > 2:
@@ -51,7 +51,7 @@ def extend_and_filter_along_rows(a, kernel, extension_array=None,
     if extension_array is None:
         # [::-1] is a python idiom to reverse an array
         extension_array = a[:, ::-1]
-    
+
     extension_array = numpy.atleast_2d(extension_array)
 
     if a.shape[0] != extension_array.shape[0]:
@@ -62,28 +62,28 @@ def extend_and_filter_along_rows(a, kernel, extension_array=None,
             zip(a, extension_array)):
 
         if expand_after_extending:
-            output_row = extend_expand_and_filter(each_row, kernel, 
-                    each_extension_row, pre_extension_length, 
+            output_row = extend_expand_and_filter(each_row, kernel,
+                    each_extension_row, pre_extension_length,
                     post_extension_length, expanded_first_sample_zero)
         else:
-            output_row = extend_and_filter(each_row, kernel, 
-                    each_extension_row, pre_extension_length, 
+            output_row = extend_and_filter(each_row, kernel,
+                    each_extension_row, pre_extension_length,
                     post_extension_length)
 
         try:
             filtered_a
         except NameError:
-            filtered_a = numpy.empty((a.shape[0], len(output_row)), 
+            filtered_a = numpy.empty((a.shape[0], len(output_row)),
                     dtype=a.dtype)
-            
+
         filtered_a[row_idx, :] = output_row
 
     return filtered_a
 
-def extend_and_filter_along_cols(a, kernel, extension_array=None, 
-        pre_extension_length=None, post_extension_length=None, 
+def extend_and_filter_along_cols(a, kernel, extension_array=None,
+        pre_extension_length=None, post_extension_length=None,
         expand_after_extending=False, expanded_first_sample_zero=True):
-    '''Like :func:`extend_and_filter_along_rows` but operates on the 
+    '''Like :func:`extend_and_filter_along_rows` but operates on the
     columns of the input array rather than the rows.
     '''
 
@@ -96,16 +96,16 @@ def extend_and_filter_along_cols(a, kernel, extension_array=None,
     else:
         transposed_extension = numpy.atleast_2d(extension_array).transpose()
 
-    transposed_out = extend_and_filter_along_rows(transposed_a, kernel, 
+    transposed_out = extend_and_filter_along_rows(transposed_a, kernel,
             transposed_extension, pre_extension_length, post_extension_length,
             expand_after_extending, expanded_first_sample_zero)
 
     return transposed_out.transpose()
 
 
-def _extend_and_filter_along_rows_and_cols(lolo, 
+def _extend_and_filter_along_rows_and_cols(lolo,
         row_filters, col_filters, expand=False):
-    '''A function to do filtering along both rows and columns 
+    '''A function to do filtering along both rows and columns
     of a given set of four low pass inputs. This function either decimates
     the filtered result by two, or twice expands the result by inserting
     zeros prior to filtering. The decimation is used in the forward
@@ -123,19 +123,19 @@ def _extend_and_filter_along_rows_and_cols(lolo,
 
     ``col_filters`` is equivalent to ``row_filters`` but for the columns.
 
-    ``expand`` is a boolean dictating whether the output is expanded 
-    or decimated. If ``expand`` equates to ``False`` (the default) then 
+    ``expand`` is a boolean dictating whether the output is expanded
+    or decimated. If ``expand`` equates to ``False`` (the default) then
     the output is decimated, otherwise if it equates to ``True`` the
     output is expanded.
 
-    The point of this function is that it is necessary to interleave 
-    the row and column filterings for each tree as the row and column 
-    trees are inherently interleaved. There are 4 interleaved inputs 
+    The point of this function is that it is necessary to interleave
+    the row and column filterings for each tree as the row and column
+    trees are inherently interleaved. There are 4 interleaved inputs
     for 4 interleaved outputs (the four arrangements of the two trees
     across rows and columns) for set of filterings.
     Pragmatically, this means that in order to get the correct
     extensions for the column filtering, we need to have done all
-    the necessary row filtering (or vice-versa depending on the 
+    the necessary row filtering (or vice-versa depending on the
     the order of row/column filtering), hence this function.
     '''
 
@@ -146,7 +146,7 @@ def _extend_and_filter_along_rows_and_cols(lolo,
     post_extension_length = (len(col_filters['h']))//2
 
     # firstly, filter along the rows
-    row_filtered = {}        
+    row_filtered = {}
     for col in ('h', 'g'):
         for row in ('h', 'g'):
             data = numpy.atleast_2d(lolo[(col, row)])
@@ -161,8 +161,7 @@ def _extend_and_filter_along_rows_and_cols(lolo,
                 row_filtered[(col, row)] = extend_and_filter_along_rows(
                         data, row_filters[row], extension[:, ::-1],
                         pre_extension_length, post_extension_length)[:, ::2]
-    
-    row_filtered[('h', 'g')]
+
     # now filter along the columns
     filtered = {}
     for col in ('h', 'g'):
@@ -170,13 +169,13 @@ def _extend_and_filter_along_rows_and_cols(lolo,
 
             if expand:
                 filtered[(col, row)] = extend_and_filter_along_cols(
-                        row_filtered[(col, row)], col_filters[col], 
+                        row_filtered[(col, row)], col_filters[col],
                         row_filtered[(opp[col], row)][::-1, :],
                         pre_extension_length, post_extension_length,
                         expand_after_extending=True)
             else:
                 filtered[(col, row)] = extend_and_filter_along_cols(
-                        row_filtered[(col, row)], col_filters[col], 
+                        row_filtered[(col, row)], col_filters[col],
                         row_filtered[(opp[col], row)][::-1, :],
                         pre_extension_length, post_extension_length)[::2, :]
 
@@ -191,44 +190,44 @@ def _2d_dtcwt_forward(x, levels, qshift_length=14):
     ``qshift_length`` is the length of the qshift filters used for
     levels 2 and above.
 
-    This implementation is not identical to that described in the 
-    various papers. The implemention is designed to keep the output 
+    This implementation is not identical to that described in the
+    various papers. The implemention is designed to keep the output
     consistent with Nick Kingsbury's original dtcwt toolbox.
     '''
 
     # We firstly define a pair of nested functions. These are specific
-    # to this function and the internal data structures, so we don't 
+    # to this function and the internal data structures, so we don't
     # pollute the global namespace with them.
     #
     def _create_high_pass_complex_outputs(hilo, lohi, hihi):
-        '''Convert all of the high pass decimated filtered arrays into 
-        a list of 6 complex arrays corresponding to each complex wavelet 
+        '''Convert all of the high pass decimated filtered arrays into
+        a list of 6 complex arrays corresponding to each complex wavelet
         orientation.
 
-        The outputs differ from those described in [Selesnick05] 
+        The outputs differ from those described in [Selesnick05]
         (equations (43)-(44) and (49)-(50)). The outputs used should
-        be readily inferable from the code for this function (which 
+        be readily inferable from the code for this function (which
         avoids a messy block of ascii mathematics).
 
         This function could be modified to more closely reflect the
-        [Selesnick05], but instead is designed to generate data 
+        [Selesnick05], but instead is designed to generate data
         compatible with NGK's original DTCWT toolbox (which pre-dated
         the tutorial).
 
         This is fine, as the requirements on the wavelets are that the
         complex pair comprise a hilbert pair (that is, the sum of the
-        real wavelet and j times the complex wavelet is single sided 
+        real wavelet and j times the complex wavelet is single sided
         in the oriented frequency domain).
         '''
         output = {}
         orientations = {
-                15: ('hi', 'lo'), 
-                45: ('hi', 'hi'), 
+                15: ('hi', 'lo'),
+                45: ('hi', 'hi'),
                 75: ('lo', 'hi')}
 
         datasets = {
-                ('lo', 'hi'): lohi, 
-                ('hi', 'lo'): hilo, 
+                ('lo', 'hi'): lohi,
+                ('hi', 'lo'): hilo,
                 ('hi', 'hi'): hihi}
 
         # The following describes how the inputs are arranged to generate
@@ -236,7 +235,7 @@ def _2d_dtcwt_forward(x, levels, qshift_length=14):
         # Each orientation has two wavelets given by
         # pos_orientation = 1/sqrt(2) * ( (a - b) + j(c + d) )
         # neg_orientation = 1/sqrt(2) * ( (a + b) + j(c - d) )
-        # 
+        #
         # a, b, c and d are provided by wavelet_arrangement below.
         # Each tuple in the dictionary provides the keys to datasets
         # yielding (a, b, c, d). That is, if the first entry in the tuple
@@ -262,7 +261,7 @@ def _2d_dtcwt_forward(x, levels, qshift_length=14):
         swaps the respective trees along the given axis. This would be done
         in order to maintain even length arrays.
 
-        The technique that is equivalent to that done in NGK's dtcwt_toolbox 
+        The technique that is equivalent to that done in NGK's dtcwt_toolbox
         and generates compatible outputs.
         '''
         first_samp_slicer = [slice(None)] * 2
@@ -276,23 +275,23 @@ def _2d_dtcwt_forward(x, levels, qshift_length=14):
         opp_axes = [('g', 'h'), ('h', 'g')]
 
         _lolo_hh = numpy.concatenate(
-                    (lolo[opp_axes[axis]], lolo[('h','h')][last_samp_slicer]), 
-                    axis=axis)
+            (lolo[opp_axes[axis]], lolo[('h','h')][tuple(last_samp_slicer)]),
+            axis=axis)
 
         new_lolo[opp_axes[axis]] = numpy.concatenate(
-                (lolo[opp_axes[axis]][first_samp_slicer], lolo[('h','h')]), 
-                axis=axis)
+            (lolo[opp_axes[axis]][tuple(first_samp_slicer)], lolo[('h','h')]),
+            axis=axis)
 
         new_lolo[('h', 'h')] = _lolo_hh
 
         # And the g columns
         _lolo_gg = numpy.concatenate(
-                (lolo[('g','g')][first_samp_slicer], lolo[opp_axes[1-axis]]),
-                axis=axis)
+            (lolo[('g','g')][tuple(first_samp_slicer)], lolo[opp_axes[1-axis]]),
+            axis=axis)
 
         new_lolo[opp_axes[1-axis]] = numpy.concatenate(
-                (lolo[('g','g')], lolo[opp_axes[1-axis]][last_samp_slicer]),
-                axis=axis)
+            (lolo[('g','g')], lolo[opp_axes[1-axis]][tuple(last_samp_slicer)]),
+            axis=axis)
 
         new_lolo[('g', 'g')] = _lolo_gg
 
@@ -320,18 +319,18 @@ def _2d_dtcwt_forward(x, levels, qshift_length=14):
     _lo = extend_and_filter_along_rows(x, biort_lo)
 
     # Now, as in [Selesnick05] we denote the different filter trees
-    # by 'h' and 'g', except that as with the 1D transform, to maintain 
-    # consistency with NGK's dtcwt toolbox, the trees that correspond 
+    # by 'h' and 'g', except that as with the 1D transform, to maintain
+    # consistency with NGK's dtcwt toolbox, the trees that correspond
     # to the real and the imginary parts are swapped.
     #
     # We work with 4 dictionaries for each level. These dictionaries
     # are lolo, hilo, lohi and hihi, denoting whether the high pass
     # or the low pass filter has been used on the columns and the rows
     # (hilo is high on columns and low on rows, lohi the opposite).
-    # They each contain all of the possible arrangements of the h filters 
+    # They each contain all of the possible arrangements of the h filters
     # and the g filters (corresponding to each tree) on rows and columns,
-    # giving four arrays in total. The dictionary contains arrays that are 
-    # the filtered, decimated, lolo arrays from the previous level. 
+    # giving four arrays in total. The dictionary contains arrays that are
+    # the filtered, decimated, lolo arrays from the previous level.
     # These can then be used to derive the outputs from the 2D DTCWT. lolo
     # is passed on to the next level.
     #
@@ -348,11 +347,11 @@ def _2d_dtcwt_forward(x, levels, qshift_length=14):
     _hilo = extend_and_filter_along_cols(_lo, biort_hi)
     _lolo = extend_and_filter_along_cols(_lo, biort_lo)
 
-    # Now we perform the necessary level 1 decimations for each arrangement 
+    # Now we perform the necessary level 1 decimations for each arrangement
     # of trees.
 
     # The following pair of little dictionaries is simply to look up
-    # which value of the filtered signal we need to start at for the 
+    # which value of the filtered signal we need to start at for the
     # decimation.
     hi_start = {'h': 0, 'g': 1}
     lo_start = {'h': 1, 'g': 0}
@@ -408,7 +407,7 @@ def _2d_dtcwt_forward(x, levels, qshift_length=14):
                  _scale[lo_start[col]::2, lo_start[row]::2] = (
                          lolo[(col, row)])
 
-        # Append the outputs, converting the hi pass outputs to 
+        # Append the outputs, converting the hi pass outputs to
         # the requisite complex array.
         hi.append(_create_high_pass_complex_outputs(hilo, lohi, hihi))
         scale.append(_scale)
@@ -442,24 +441,24 @@ def _2d_dtcwt_inverse(lo, hi, qshift_length=14):
         '''
 
         orientations = {
-                15: ('hi', 'lo'), 
-                45: ('hi', 'hi'), 
+                15: ('hi', 'lo'),
+                45: ('hi', 'hi'),
                 75: ('lo', 'hi')}
 
-        # From the forward operation, each orientation has two wavelets 
+        # From the forward operation, each orientation has two wavelets
         # given by:
         # pos_orientation, p = 1/sqrt(2) * ( (a - b) + j(c + d) )
         # neg_orientation, q = 1/sqrt(2) * ( (a + b) + j(c - d) )
-        # 
+        #
         # This means we can extract a, b, c and d as follows:
         # a = 1/sqrt(2) * real(q + p)
         # b = 1/sqrt(2) * real(q - p)
         # c = 1/sqrt(2) * imag(p + q)
         # d = 1/sqrt(2) * imag(p - q)
-        # 
+        #
         # a, b, c and d are arranged by wavelet_arrangement below.
         # Each tuple in the dictionary provides the keys to datasets
-        # into which (a, b, c, d) should be inserted. 
+        # into which (a, b, c, d) should be inserted.
         # That is, if the first entry in the tuple
         # is ('g', 'h'), then data[('g', 'h')] will be set to be ``a`` where
         # data is a particular output
@@ -494,7 +493,7 @@ def _2d_dtcwt_inverse(lo, hi, qshift_length=14):
         have been done in order to maintain even length rows or columns.
 
         do_rows and do_columns should be booleans dictating whether
-        or not the rows or the columns respectively should have a sample 
+        or not the rows or the columns respectively should have a sample
         removed.
 
         See the _2d_dtcwt_forward for more information on exactly
@@ -510,21 +509,21 @@ def _2d_dtcwt_inverse(lo, hi, qshift_length=14):
 
         opp_axes = [('g', 'h'), ('h', 'g')]
 
-        _lolo_hh = lolo[opp_axes[axis]][first_samp_remover]
+        _lolo_hh = lolo[opp_axes[axis]][tuple(first_samp_remover)]
 
-        new_lolo[opp_axes[axis]] = lolo[('h','h')][last_samp_remover]
+        new_lolo[opp_axes[axis]] = lolo[('h','h')][tuple(last_samp_remover)]
         new_lolo[('h', 'h')] = _lolo_hh
 
         # And the g columns
-        _lolo_gg = lolo[opp_axes[1-axis]][last_samp_remover]
+        _lolo_gg = lolo[opp_axes[1-axis]][tuple(last_samp_remover)]
 
-        new_lolo[opp_axes[1-axis]] = lolo[('g','g')][first_samp_remover]
+        new_lolo[opp_axes[1-axis]] = lolo[('g','g')][tuple(first_samp_remover)]
         new_lolo[('g', 'g')] = _lolo_gg
 
         return new_lolo
 
-    H00a, H01a, H00b, H01b = _generate_qshift_filters(qshift_length)    
-       
+    H00a, H01a, H00b, H01b = _generate_qshift_filters(qshift_length)
+
     levels = len(hi)
 
     # The following pair of little dictionaries is simply to look up
@@ -554,17 +553,17 @@ def _2d_dtcwt_inverse(lo, hi, qshift_length=14):
             # We need to remove a row
             lolo = _remove_additional_samples(lolo, axis=0)
 
-        # We now want to compute the next level lolo from 
+        # We now want to compute the next level lolo from
         # the extracted complex hi inputs and the previous lolo.
-        # 
+        #
         # Note that for every set of row or column filters, there
         # are two parts that use the same set. This means there is
-        # an easy efficiency to be gained by performing a pair of 
+        # an easy efficiency to be gained by performing a pair of
         # summations after (in this case) the row filtering but before
         # the column filtering. We don't do that here to maintain
         # clarity and code simplicity.
         lolo_part1 = _extend_and_filter_along_rows_and_cols(
-                hihi, {'h': H01a, 'g': H01b}, {'h': H01a, 'g': H01b}, 
+                hihi, {'h': H01a, 'g': H01b}, {'h': H01a, 'g': H01b},
                 expand=True)
 
         lolo_part2 = _extend_and_filter_along_rows_and_cols(
@@ -604,7 +603,7 @@ def _2d_dtcwt_inverse(lo, hi, qshift_length=14):
     lolo_shape = lolo['h', 'h'].shape
     lolo_dtype = lolo['h', 'h'].dtype
 
-    _lolo = numpy.empty((lolo_shape[0]*2, lolo_shape[1]*2), 
+    _lolo = numpy.empty((lolo_shape[0]*2, lolo_shape[1]*2),
             dtype=lolo_dtype)
 
     _hilo = numpy.empty(_lolo.shape, dtype=_lolo.dtype)
@@ -619,7 +618,7 @@ def _2d_dtcwt_inverse(lo, hi, qshift_length=14):
             _hihi[hi_start[col]::2, hi_start[row]::2] = hihi[(col, row)]
 
     col_part1 = extend_and_filter_along_cols(_hihi, inv_biort_hi)
-    col_part2 = extend_and_filter_along_cols(_lohi, inv_biort_lo)    
+    col_part2 = extend_and_filter_along_cols(_lohi, inv_biort_lo)
     col_part3 = extend_and_filter_along_cols(_hilo, inv_biort_hi)
     col_part4 = extend_and_filter_along_cols(_lolo, inv_biort_lo)
 
@@ -633,7 +632,7 @@ def _2d_dtcwt_inverse(lo, hi, qshift_length=14):
     return out
 
 
-def dtcwt_forward(x, levels, qshift_length=14, 
+def dtcwt_forward(x, levels, qshift_length=14,
         allow_odd_length_dimensions=False):
     '''Take the 2D Dual-Tree Complex Wavelet transform of the input
     array, ``x``.
@@ -648,8 +647,8 @@ def dtcwt_forward(x, levels, qshift_length=14,
     a ``ValueError`` exception is raised. Setting ``allow_odd_length_dimensions``
     to ``True`` will cause odd length dimensions to be extended as necessary
     by duplicating the last column or the last row at the right edge or bottom
-    respectively, such that the array has an even number of rows and 
-    columns. In such a case, calling :func:`dtcwt_inverse` on the 
+    respectively, such that the array has an even number of rows and
+    columns. In such a case, calling :func:`dtcwt_inverse` on the
     generated output will yield an even array with those repeated
     elements still present. It is up to the user to keep track of such
     odd arrays, which is why ``allow_odd_length_dimensions`` needs to
@@ -662,20 +661,20 @@ def dtcwt_forward(x, levels, qshift_length=14,
     ``hi`` is a tuple of length ``levels``, containing the complex
     high-pass outputs at each level. The first entry in the tuple
     is the bottom level output and the last entry the top level output.
-    Each high pass output is a dictionary of two-dimensional complex 
+    Each high pass output is a dictionary of two-dimensional complex
     arrays. The keys to the dictionary are ``-75``, ``-45``, ``-15``,
     ``15``, ``45`` and ``75`` and correspond to the angle of orientation
-    of each of the six complex wavelets that generated that particular 
+    of each of the six complex wavelets that generated that particular
     output.
 
-    ``scale`` is the collected low-pass outputs for every level. It 
-    can be safely discarded (it is not needed for the inverse), 
+    ``scale`` is the collected low-pass outputs for every level. It
+    can be safely discarded (it is not needed for the inverse),
     but is computed for free.
     '''
     x = numpy.atleast_2d(x)
-    
+
     if x.ndim == 2:
-        if (not allow_odd_length_dimensions and 
+        if (not allow_odd_length_dimensions and
                 (x.shape[0] % 2 != 0 or x.shape[1] % 2 != 0)):
 
             raise ValueError('Odd length error: Processing of data with '
@@ -690,7 +689,7 @@ def dtcwt_forward(x, levels, qshift_length=14,
                 'one- or two-dimensional')
 
 def dtcwt_inverse(lo, hi, qshift_length=14):
-    '''Take the inverse 2D Dual-Tree Complex Wavelet transform of the 
+    '''Take the inverse 2D Dual-Tree Complex Wavelet transform of the
     input arrays, ``lo`` and ``hi``.
 
     ``qshift_length`` is the length of the qshift filters used for
@@ -699,7 +698,7 @@ def dtcwt_inverse(lo, hi, qshift_length=14):
 
     ``levels`` is how many levels should be computed.
     '''
-    
+
     if lo.ndim == 1 or lo.ndim == 2:
         return _2d_dtcwt_inverse(lo, hi, qshift_length=qshift_length)
 

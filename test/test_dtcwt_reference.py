@@ -34,7 +34,7 @@ class TestDTCWTReferenceExtend1D(TestCasePy3):
 
 
     def test_extend(self):
-        # test_arrays is (input_array, pre_extension_length, extension_data, 
+        # test_arrays is (input_array, pre_extension_length, extension_data,
         #                 post_extension_length, output)
         # extension_data = None corresponds to no input
         test_arrays = (
@@ -55,7 +55,7 @@ class TestDTCWTReferenceExtend1D(TestCasePy3):
                  ([1, 2, 3, 4], 0, [8, 7, 6, 5], 6,
                     [1, 2, 3, 4, 8, 7, 6, 5, 1, 2]))
 
-        for (input_arr, pre_ext_length, ext_data, 
+        for (input_arr, pre_ext_length, ext_data,
                 post_ext_length, output_arr) in test_arrays:
 
             if ext_data is not None:
@@ -83,7 +83,7 @@ class Test1DDTCWTBase(object):
         for input_shape, levels in datasets:
 
             input_array = numpy.random.randn(*input_shape)
-            self.assertRaisesRegex(ValueError, 
+            self.assertRaisesRegex(ValueError,
                     'Input length error',
                     self.dtcwt_forward_function, *(input_array, levels))
 
@@ -94,7 +94,7 @@ class Test1DDTCWTBase(object):
         for each_file in glob.glob(
                 os.path.join(test_data_directory, '1d*')):
 
-            test_data = numpy.load(each_file)
+            test_data = numpy.load(each_file, encoding='bytes')
 
             assert(test_data['biort'] == 'antonini')
 
@@ -108,11 +108,11 @@ class Test1DDTCWTBase(object):
 
             test_data.close()
 
-            if (self.restrict_factors_to_2_pow_levels and 
+            if (self.restrict_factors_to_2_pow_levels and
                     len(input_array) % 2**levels != 0):
                 continue
 
-            lo, hi, scale = self.dtcwt_forward_function(input_array, levels, 
+            lo, hi, scale = self.dtcwt_forward_function(input_array, levels,
                     qshift_length=qshift_length)
 
             self.assertTrue(numpy.allclose(lo, ref_lo))
@@ -135,13 +135,13 @@ class Test1DDTCWTSingleExtension(TestCasePy3, Test1DDTCWTBase):
                 ((128,), 8),
                 ((256,), 9))
         for input_shape, levels in datasets:
-            
+
             input_array = numpy.random.randn(*input_shape)
 
             # Make sure the levels-1 case works
             self.dtcwt_forward_function(input_array, levels-1)
 
-            self.assertRaisesRegex(ValueError, 
+            self.assertRaisesRegex(ValueError,
                     'Input array too short for levels requested',
                     self.dtcwt_forward_function, *(input_array, levels))
 
@@ -155,7 +155,7 @@ class Test1DDTCWTSingleExtension(TestCasePy3, Test1DDTCWTBase):
         for input_shape, levels in datasets:
 
             input_array = numpy.random.randn(*input_shape)
-            self.assertRaisesRegex(ValueError, 
+            self.assertRaisesRegex(ValueError,
                     'Input length error',
                     self.dtcwt_forward_function, *(input_array, levels))
 
@@ -232,21 +232,21 @@ class TestDTCWTReferenceMisc(TestCasePy3):
 
     def test_extend_and_filter(self):
         # a tuple of test specs:
-        # (input_shape, kernel_length, extension_array, 
+        # (input_shape, kernel_length, extension_array,
         #  pre_length, post_length)
         datasets = (
                 ((128,), 16, None, None, None),
-                ((128,), 15, None, None, None),            
+                ((128,), 15, None, None, None),
                 ((128,), 11, [1, 2, 3], None, None),
                 ((128,), 16, [3, 2, 1], None, None),
                 ((36,), 16, [3, 2, 1], 4, 10),
                 ((36,), 16, [3, 2, 1], 5, 10),
-                ((36,), 16, [3, 2, 1], 11, 5),                
+                ((36,), 16, [3, 2, 1], 11, 5),
                 ((12,), 17, None, None, None))
-        
+
         delta = numpy.array([1])
 
-        for (input_shape, kernel_length, ext_array, 
+        for (input_shape, kernel_length, ext_array,
                 pre_length, post_length) in datasets:
             a = numpy.random.randn(*input_shape)
 
@@ -256,20 +256,20 @@ class TestDTCWTReferenceMisc(TestCasePy3):
             if post_length is None:
                 post_length = kernel_length - pre_length - 1
 
-            _a = reference.extend_1d(a, pre_length, 
+            _a = reference.extend_1d(a, pre_length,
                     ext_array, post_length)
 
             kernel = numpy.random.randn(kernel_length)
-            
+
             ref_output = numpy.convolve(_a, kernel, mode='valid')
 
             delta_kernel = numpy.concatenate(
-                    (numpy.zeros(post_length), delta, 
+                    (numpy.zeros(post_length), delta,
                         numpy.zeros(pre_length)))
 
-            delta_args = (a, delta_kernel, ext_array, pre_length, 
+            delta_args = (a, delta_kernel, ext_array, pre_length,
                     post_length)
-            kernel_args = (a, kernel, ext_array, pre_length, 
+            kernel_args = (a, kernel, ext_array, pre_length,
                     post_length)
 
             delta_output = reference.extend_and_filter(*delta_args)
@@ -282,21 +282,21 @@ class TestDTCWTReferenceMisc(TestCasePy3):
 
     def test_extend_and_filter_and_decimate(self):
         # a tuple of test specs:
-        # (input_shape, kernel_length, extension_array, 
+        # (input_shape, kernel_length, extension_array,
         #  pre_length, post_length)
         datasets = (
                 ((128,), 16, None, None, None),
-                ((128,), 15, None, None, None),            
+                ((128,), 15, None, None, None),
                 ((128,), 11, [1, 2, 3], None, None),
                 ((128,), 16, [3, 2, 1], None, None),
                 ((36,), 16, [3, 2, 1], 4, 10),
                 ((36,), 16, [3, 2, 1], 5, 10),
-                ((36,), 16, [3, 2, 1], 11, 5),                
+                ((36,), 16, [3, 2, 1], 11, 5),
                 ((12,), 17, None, None, None))
-        
+
         delta = numpy.array([1])
 
-        for (input_shape, kernel_length, ext_array, 
+        for (input_shape, kernel_length, ext_array,
                 pre_length, post_length) in datasets:
             a = numpy.random.randn(*input_shape)
 
@@ -306,20 +306,20 @@ class TestDTCWTReferenceMisc(TestCasePy3):
             if post_length is None:
                 post_length = kernel_length - pre_length - 1
 
-            _a = reference.extend_1d(a, pre_length, 
+            _a = reference.extend_1d(a, pre_length,
                     ext_array, post_length)
 
             kernel = numpy.random.randn(kernel_length)
-            
+
             ref_output = numpy.convolve(_a, kernel, mode='valid')
 
             delta_kernel = numpy.concatenate(
-                    (numpy.zeros(post_length), delta, 
+                    (numpy.zeros(post_length), delta,
                         numpy.zeros(pre_length)))
 
-            delta_args = (a, delta_kernel, ext_array, pre_length, 
+            delta_args = (a, delta_kernel, ext_array, pre_length,
                     post_length, True)
-            kernel_args = (a, kernel, ext_array, pre_length, 
+            kernel_args = (a, kernel, ext_array, pre_length,
                     post_length, True)
 
             delta_output = reference.extend_and_filter(*delta_args)
@@ -333,21 +333,21 @@ class TestDTCWTReferenceMisc(TestCasePy3):
 
     def test_extend_expand_and_filter(self):
         # a tuple of test specs:
-        # (input_shape, kernel_length, extension_array, 
+        # (input_shape, kernel_length, extension_array,
         #  pre_length, post_length)
         datasets = (
                 ((128,), 16, None, None, None),
-                ((128,), 15, None, None, None),            
+                ((128,), 15, None, None, None),
                 ((128,), 11, [1, 2, 3], None, None),
                 ((128,), 16, [3, 2, 1], None, None),
                 ((36,), 16, [3, 2, 1], 4, 10),
                 ((36,), 16, [3, 2, 1], 5, 10),
-                ((36,), 16, [3, 2, 1], 11, 5),                
+                ((36,), 16, [3, 2, 1], 11, 5),
                 ((12,), 17, None, None, None))
-        
+
         delta = numpy.array([1])
 
-        for (input_shape, kernel_length, ext_array, 
+        for (input_shape, kernel_length, ext_array,
                 pre_length, post_length) in datasets:
             a = numpy.random.randn(*input_shape)
 
@@ -361,7 +361,7 @@ class TestDTCWTReferenceMisc(TestCasePy3):
             # will result in twice as many extension samples as needed
             # after expansion, but allows a simple way to compute the
             # correct expanded, extended array.
-            overextended_a = reference.extend_1d(a, pre_length, 
+            overextended_a = reference.extend_1d(a, pre_length,
                     ext_array, post_length)
 
             kernel = numpy.random.randn(kernel_length)
@@ -396,16 +396,16 @@ class TestDTCWTReferenceMisc(TestCasePy3):
                 # of a
                 expanded_a = expanded_extended_a[pre_length:-post_length]
 
-                ref_output = numpy.convolve(expanded_extended_a, 
+                ref_output = numpy.convolve(expanded_extended_a,
                         kernel, mode='valid')
 
                 delta_kernel = numpy.concatenate(
-                        (numpy.zeros(post_length), delta, 
+                        (numpy.zeros(post_length), delta,
                             numpy.zeros(pre_length)))
 
-                delta_args = (a, delta_kernel, ext_array, 
+                delta_args = (a, delta_kernel, ext_array,
                         pre_length, post_length)
-                kernel_args = (a, kernel, ext_array, pre_length, 
+                kernel_args = (a, kernel, ext_array, pre_length,
                         post_length)
 
                 if first_sample_zero is not None:

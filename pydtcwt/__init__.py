@@ -3,6 +3,6 @@
 ''' Import everything we want into the pydtcwt namespace
 '''
 
-import reference_2d
-import reference
-import reference_cmplx
+from . import reference_2d
+from . import reference
+from .import reference_cmplx

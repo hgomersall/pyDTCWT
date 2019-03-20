@@ -29,7 +29,7 @@ class TestExtendAndFilterAlongRows(TestCasePy3):
 
     def test_extend_and_filter_on_various_sizes(self):
         # a tuple of test specs:
-        # (input_shape, kernel_length, extension_array_length, 
+        # (input_shape, kernel_length, extension_array_length,
         #  pre_length, post_length)
         datasets = (
                 ((128,), 16, 24, None, None),
@@ -40,10 +40,10 @@ class TestExtendAndFilterAlongRows(TestCasePy3):
                 ((12, 14), 16, 3, 5, 10),
                 ((36, 18), 16, 3, 11, 5),
                 ((12, 16), 17, 12, None, None))
-        
+
         delta = numpy.array([1])
 
-        for (input_shape, kernel_length, ext_array_length, 
+        for (input_shape, kernel_length, ext_array_length,
                 pre_length, post_length) in datasets:
 
             extension_array_shape = numpy.array(input_shape)
@@ -69,17 +69,17 @@ class TestExtendAndFilterAlongRows(TestCasePy3):
                 _post_length = kernel_length - _pre_length - 1
             else:
                 _post_length = post_length
-            
+
             # We test with both a delta and a random kernel
             delta_kernel = numpy.concatenate(
-                    (numpy.zeros(_post_length), delta, 
+                    (numpy.zeros(_post_length), delta,
                         numpy.zeros(_pre_length)))
 
-            random_kernel = numpy.random.randn(kernel_length)            
+            random_kernel = numpy.random.randn(kernel_length)
 
-            delta_args = (a, delta_kernel, extension_array, pre_length, 
+            delta_args = (a, delta_kernel, extension_array, pre_length,
                     post_length)
-            random_kernel_args = (a, random_kernel, extension_array, 
+            random_kernel_args = (a, random_kernel, extension_array,
                     pre_length, post_length)
 
             delta_output = self._test_function(*delta_args)
@@ -100,17 +100,17 @@ class TestExtendAndFilterAlongRows(TestCasePy3):
             for row, extension_row, test_row in zip(
                     a_2d, extension_array_2d, test_output_2d):
 
-                _row = reference.extend_1d(row, _pre_length, extension_row, 
+                _row = reference.extend_1d(row, _pre_length, extension_row,
                         _post_length)
-            
-                ref_row_output = numpy.convolve(_row, random_kernel, 
+
+                ref_row_output = numpy.convolve(_row, random_kernel,
                         mode='valid')
-                
+
                 self.assertTrue(numpy.allclose(ref_row_output, test_row))
-    
+
     def test_extend_expand_and_filter_on_various_sizes(self):
         # a tuple of test specs:
-        # (input_shape, kernel_length, extension_array_length, 
+        # (input_shape, kernel_length, extension_array_length,
         #  pre_length, post_length)
         datasets = (
                 ((128,), 16, 24, None, None),
@@ -121,10 +121,10 @@ class TestExtendAndFilterAlongRows(TestCasePy3):
                 ((12, 14), 16, 3, 5, 10),
                 ((36, 18), 16, 3, 11, 5),
                 ((12, 16), 17, 12, None, None))
-        
+
         delta = numpy.array([1])
 
-        for (input_shape, kernel_length, ext_array_length, 
+        for (input_shape, kernel_length, ext_array_length,
                 pre_length, post_length) in datasets:
 
             extension_array_shape = numpy.array(input_shape)
@@ -150,13 +150,13 @@ class TestExtendAndFilterAlongRows(TestCasePy3):
                 _post_length = kernel_length - _pre_length - 1
             else:
                 _post_length = post_length
-            
+
             # We test with both a delta and a random kernel
             delta_kernel = numpy.concatenate(
-                    (numpy.zeros(_post_length), delta, 
+                    (numpy.zeros(_post_length), delta,
                         numpy.zeros(_pre_length)))
 
-            random_kernel = numpy.random.randn(kernel_length)            
+            random_kernel = numpy.random.randn(kernel_length)
 
             for first_sample_zero in (True, False, None):
 
@@ -170,9 +170,9 @@ class TestExtendAndFilterAlongRows(TestCasePy3):
                     # The default, so true for first_sample_zero is None
                     _first_sample_zero = True
 
-                delta_args = (a, delta_kernel, extension_array, 
+                delta_args = (a, delta_kernel, extension_array,
                         _pre_length, post_length, True)
-                random_kernel_args = (a, random_kernel, extension_array, 
+                random_kernel_args = (a, random_kernel, extension_array,
                         pre_length, post_length, True)
 
                 if first_sample_zero is not None:
@@ -199,7 +199,7 @@ class TestExtendAndFilterAlongRows(TestCasePy3):
                     # will result in twice as many extension samples as needed
                     # after expansion, but allows a simple way to compute the
                     # correct expanded, extended array.
-                    overextended_row = reference.extend_1d(row, _pre_length, 
+                    overextended_row = reference.extend_1d(row, _pre_length,
                             extension_row, _post_length)
 
                     expanded_overextended_row = numpy.zeros(
@@ -223,7 +223,7 @@ class TestExtendAndFilterAlongRows(TestCasePy3):
                     expanded_row = expanded_extended_row[
                             _pre_length:-_post_length]
 
-                    ref_row_output = numpy.convolve(expanded_extended_row, 
+                    ref_row_output = numpy.convolve(expanded_extended_row,
                             random_kernel, mode='valid')
 
                     self.assertTrue(
@@ -252,7 +252,7 @@ class TestExtendAndFilterAlongRows(TestCasePy3):
                     reference_2d.extend_and_filter_along_rows, *args)
 
     def test_greater_than_2d_fails(self):
-        
+
         datasets = (
                 (128, 28, 1),
                 (128, 23, 2),
@@ -363,7 +363,7 @@ class Test2DDTCWT(TestCasePy3):
         for each_file in glob.glob(
                 os.path.join(test_data_directory, '2d*')):
 
-            test_data = numpy.load(each_file)
+            test_data = numpy.load(each_file, encoding='bytes')
 
             assert(test_data['biort'] == 'antonini')
 
@@ -379,7 +379,7 @@ class Test2DDTCWT(TestCasePy3):
 
             input_shape = input_array.shape
 
-            if (len(input_shape) == 1 or 
+            if (len(input_shape) == 1 or
                     input_shape[0] % 2 != 0 or input_shape[1] % 2 != 0):
 
                 lo, hi, scale = self.dtcwt_forward_function(
@@ -427,17 +427,17 @@ class Test2DDTCWT(TestCasePy3):
             input_array = numpy.random.randn(*input_shape)
 
             for qshift_length in qshift_filter_lengths:
-                if (len(input_shape) == 1 or 
+                if (len(input_shape) == 1 or
                         input_shape[0] % 2 != 0 or input_shape[1] % 2 != 0):
 
                     lo, hi, scale = self.dtcwt_forward_function(
-                            input_array, levels, 
+                            input_array, levels,
                             qshift_length=qshift_length,
                             allow_odd_length_dimensions=True)
 
                 else:
                     lo, hi, scale = self.dtcwt_forward_function(
-                            input_array, levels, 
+                            input_array, levels,
                             qshift_length=qshift_length)
 
                 test_output = reference_2d.dtcwt_inverse(lo, hi,
@@ -457,15 +457,15 @@ class TestDTCWTReference2DMisc(TestCasePy3):
 
     def test_extend_and_filter_along_rows_and_cols(self):
         datasets = (
-                ((192,), 14),                
+                ((192,), 14),
                 ((192, 36), 14),
                 ((192, 36), 16),
-                ((191, 35), 16),                
+                ((191, 35), 16),
                 ((36, 26), 10),
                 ((16, 16), 11))
 
         for size, filter_length in datasets:
-            
+
             for expand_after_extending in (None, True, False):
 
                 if expand_after_extending is None:
@@ -482,13 +482,13 @@ class TestDTCWTReference2DMisc(TestCasePy3):
 
                 filter_tuple = (('g', 'h'), ('h', 'g'), ('h', 'h'), ('g', 'g'))
 
-                # col_opps and row_opps define which dataset to use for the 
+                # col_opps and row_opps define which dataset to use for the
                 # extension. It's basically the opposite filter based
                 # on whether it's the row or the column.
                 col_opps = (('h', 'h'), ('g', 'g'), ('g', 'h'), ('h', 'g'))
                 row_opps = (('g', 'g'), ('h', 'h'), ('h', 'g'), ('g', 'h'))
 
-                # firstly generate the data            
+                # firstly generate the data
                 for filters in filter_tuple:
                     test_lolo[filters] = numpy.atleast_2d(
                             numpy.random.randn(*size))
@@ -519,15 +519,15 @@ class TestDTCWTReference2DMisc(TestCasePy3):
                     if _expand_after_extending:
                         ref_col_filtered[filters] = (
                                 reference_2d.extend_and_filter_along_cols(
-                                    test_data, col_filters[filters[0]], 
-                                    col_ext[::-1, :], pre_extension_length, 
-                                    post_extension_length, 
+                                    test_data, col_filters[filters[0]],
+                                    col_ext[::-1, :], pre_extension_length,
+                                    post_extension_length,
                                     _expand_after_extending))
                     else:
                         ref_col_filtered[filters] = (
                                 reference_2d.extend_and_filter_along_cols(
-                                    test_data, col_filters[filters[0]], 
-                                    col_ext[::-1, :], pre_extension_length, 
+                                    test_data, col_filters[filters[0]],
+                                    col_ext[::-1, :], pre_extension_length,
                                     post_extension_length)[::2, :])
 
                 for filters, row_opp in zip(filter_tuple, row_opps):
@@ -538,15 +538,15 @@ class TestDTCWTReference2DMisc(TestCasePy3):
                     if _expand_after_extending:
                         ref_filtered = (
                                 reference_2d.extend_and_filter_along_rows(
-                                    test_data, row_filters[filters[1]], 
-                                    row_ext[:, ::-1], pre_extension_length, 
-                                    post_extension_length, 
+                                    test_data, row_filters[filters[1]],
+                                    row_ext[:, ::-1], pre_extension_length,
+                                    post_extension_length,
                                     _expand_after_extending))
                     else:
                         ref_filtered = (
                                 reference_2d.extend_and_filter_along_rows(
-                                    test_data, row_filters[filters[1]], 
-                                    row_ext[:, ::-1], pre_extension_length, 
+                                    test_data, row_filters[filters[1]],
+                                    row_ext[:, ::-1], pre_extension_length,
                                     post_extension_length)[:, ::2])
 
                     self.assertTrue(
